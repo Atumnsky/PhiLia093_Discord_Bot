@@ -1,6 +1,6 @@
 **The bot is currently using the following models:**
-Reasoning: DeepSeek-V4-Flash
-Image Recognition: Qwen-Vl-Max
+Reasoning: DeepSeek-V4-Flash//
+Image Recognition: Qwen-Vl-Max//
 Image Generation: Qwen-Image-2.0-pro
 
 **Commands of the bot:**
