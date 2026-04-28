@@ -1,7 +1,8 @@
-**The bot is currently using the following models:**
-Reasoning: DeepSeek-V4-Flash//
-Image Recognition: Qwen-Vl-Max//
-Image Generation: Qwen-Image-2.0-pro
+**The bot is currently using the following models:**<br />
+Reasoning: DeepSeek-V4-Flash<br />
+Image Recognition: Qwen-Vl-Max<br />
+Image Generation: Qwen-Image-2.0-pro<br />
+Online Searching: Tavily<br />
 
 **Commands of the bot:**
 | # - for chat
