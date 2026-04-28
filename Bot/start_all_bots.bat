@@ -1,0 +1,9 @@
+@echo off
+title 启动所有机器人
+echo 正在启动 WhatsappBot...
+start "WhatsappBot" cmd /c "cd /d D:\Files\WhatsappBot && start_W_bot.bat"
+echo 正在启动 DiscordBot...
+start "机器人2" cmd /c "cd /d D:\Files\Bot && start_D_bot.bat"
+echo 所有机器人已启动，3秒后自动关闭...
+timeout /t 3 >nul
+exit

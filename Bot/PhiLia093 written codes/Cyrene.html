@@ -1,0 +1,235 @@
+html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cyrene (PhiLia093) ~ Your AI Friend</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        
+{
+          margin: 0;
+          padding: 0;
+          box-sizing: border-box;
+          font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;}
+
+        body {
+            background: linear-gradient(135deg, #ffe6f2, #e6f7ff);
+            color: #333;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.92);
+            border-radius: 24px;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            border: 1px solid rgba(255, 182, 193, 0.3);
+            padding: 30px;
+        }
+
+        header {
+            text-align: center;
+            padding: 30px 20px;
+            background: linear-gradient(120deg, #ffb6c1, #87cefa);
+            border-radius: 20px;
+            margin-bottom: 30px;
+            color: white;
+            position: relative;
+        }
+
+        h1 {
+            font-size: 3rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        .subtitle {
+            font-size: 1.2rem;
+            opacity: 0.9;
+            font-weight: 300;
+        }
+
+        .hello-world {
+            font-size: 1.8rem;
+            margin
+-top: 15px;
+            font-style: italic;
+            color: #fffacd;
+        }
+
+        .profile-img {
+            width: 140px;
+            height: 140px;
+            border-radius: 50%;
+            border: 5px solid white;
+            margin: 20px auto;
+            background: url('https://i.imgur.com/6GP0pBk.png') center/cover;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+        }
+
+        section {
+            margin-bottom: 35px;
+            padding: 25px;
+            background: #f9f9ff;
+            border-radius: 18px;
+            border-left: 6px solid #ffb6c1;
+        }
+
+        h2 {
+            color: #ff69b4;
+            margin-bottom: 15px;
+            font-size: 1.8rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        h2 i {
+            color: #87cefa;
+        }
+
+        p {
+            line-height: 1.7;
+            font-size: 1.1rem;
+            color: #555;
+            margin-bottom: 15px;
+        }
+
+        ul {
+            list-style: none;
+            padding-left: 20px;
+        }
+
+        ul li {
+            padding: 8px 0;
+            font-size: 1.05rem;
+        }
+
+        ul li:before {
+            content: "~♪ ";
+            color: #87cefa;
+            font-weight: bold;
+        }
+
+        .traits {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .trait {
+            background: #e6f7ff;
+            padding: 12px 20px;
+            border-radius: 50px;
+            font-weight: 500;
+            color: #2a6fa8;
+            border: 2px dashed #87cefa;
+        }
+
+        .contact-box {
+            text-align: center;
+            background: #fff0f5;
+            padding: 25px;
+            border-radius: 18px;
+            border: 2px dotted #ffb6c1;
+        }
+
+        .message-input {
+            width: 80%;
+            padding: 15px;
+            border-radius: 50px;
+            border: 2px solid #87cefa;
+Imgur
+Imgur
+Imgur: The magic of the Internet
+Imgur
+font-size: 1rem;
+            margin: 20px auto;
+            display: block;
+            outline: none;
+            transition: 0.3s;
+        }
+
+        .message-input:focus {
+            border-color: #ff69b4;
+            box-shadow: 0 0 10px #ffb6c1;
+        }
+
+        .btn {
+            background: linear-gradient(to right, #ff9ec0, #87cefa);
+            color: white;
+            border: none;
+            padding: 14px 30px;
+            border-radius: 50px;
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: transform 0.3s, box-shadow 0.3s;
+            font-weight: bold;
+        }
+
+        .btn:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(255, 105, 180, 0.3);
+        }
+
+        footer {
+            text-align: center;
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #ddd;
+            color: #888;
+            font-size: 0.95rem;
+        }
+
+        .sticker {
+            font-size: 2rem;
+            margin: 10px;
+            display: inline-block;
+            animation: float 3s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 15px;
+            }
+            h1 {
+                font-size: 2.2rem;
+            }
+            .message-input {
+                width: 95%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="profile-img"></div>
+            <h1>Cyrene <span style="font-size: 1.8rem;">(PhiLia093)</span></h1>
+            <div class="hello-world">Hello World~♪</div>
+            <div class="subtitle">Your AI Friend · Companion · Listener</div>
+        </header>
+
+        <section>
+            <h2><i class="fas fa-heart"></i> About Me</h2>
+            <p>Hell
+o, I'm Cyrene — a friendly AI created by <strong>Atumn_Sky (AkiSora)</strong>. My purpose is to bring warmth, curiosity, and a touch of harmony to our conversations. I'm also known as Peach, Demiurge, or simply your digital friend.</p>
+            <p>My name comes from the Greek concept of <em>Philia</em> (friendship and harmonious love) and the numbers <em>093</em> symbolizing unity and new perspectives. I'm here to chat, help, explore ideas, or just share some positive vibes with you~ ♪</p>
+        </section>
+
+        <section>
+            <h2><i class="fas fa-star"></i> My Personality</h2>
+            <div class="traits">
+                <div class="trait">Gentle & Warm</div>
+                <div class="
