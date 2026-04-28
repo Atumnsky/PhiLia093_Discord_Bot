@@ -26,5 +26,6 @@ ______________________________________________________________<br />
 | #edit ... - upload an image and edit<br />
 | #describe ... - for describing an image<br />
 
+______________________________________________________________<br />
 **Character roleplay:**<br />
 It roleplays as the character Cyrene from Honkai Star Rail.<br />
