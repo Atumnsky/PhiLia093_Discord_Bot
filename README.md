@@ -5,7 +5,7 @@ Image Generation: Qwen-Image-2.0-pro<br />
 Online Searching: Tavily<br />
 ______________________________________________________________<br />
 **Commands of the bot:**<br />
-| # - for chat<br />
+| # - for chat (no # needed for specified PHILIA093_CHAT_CHANNEL)<br />
 
 | #learn - to learn new knowledge<br />
 | #learn that - learn last searched answer<br />
