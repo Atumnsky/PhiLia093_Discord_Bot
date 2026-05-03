@@ -9,7 +9,7 @@ DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
 ALIYUN_API_KEY = os.getenv("ALIYUN_API_KEY")
-PHILIA093_CHAT_CHANNEL = int(os.getenv("PHILIA093_CHAT_CHANNEL")) #type: ignore
+PHILIA093_CHAT_CHANNEL = int(os.getenv("PHILIA093_CHAT_CHANNEL","0"))
 
 # 检查必要的密钥是否存在，缺失则报错并退出
 if not DISCORD_TOKEN:
