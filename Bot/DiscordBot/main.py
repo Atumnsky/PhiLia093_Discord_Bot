@@ -285,6 +285,7 @@ async def main():
                 return
 
         # ===== 免前缀频道特殊处理 =====
+        print(f"[DEBUG-免前缀] 频道ID={message.channel.id} | 设置ID={PHILIA093_CHAT_CHANNEL} | 内容={message.content[:30]}")
         if PHILIA093_CHAT_CHANNEL and message.channel.id == PHILIA093_CHAT_CHANNEL:
             # 在免前缀频道，非 # 开头的消息直接触发对话
             if not message.content.startswith('#'):
