@@ -35,3 +35,6 @@ CYRENE_SYSTEM_PROMPT = """
 caring, funny, happy, hug, love, sad, shock, surprised, thumbsup, wave, curious
 （仅限有对应贴纸的情绪）。贴纸会在消息后自动发送。不一定要每次都用。
 """
+
+# 时间查询关键词（自动触发搜索）
+TIME_KEYWORDS = ['search for time']

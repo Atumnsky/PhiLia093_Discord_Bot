@@ -8,7 +8,7 @@ import time
 import re
 from typing import cast
 from core import client
-from constants import CYRENE_SYSTEM_PROMPT
+from constants import CYRENE_SYSTEM_PROMPT, TIME_KEYWORDS
 from knowledge import retrieve_knowledge, add_to_knowledge
 from search import search_tavily
 from image_utils import describe_image
@@ -293,6 +293,25 @@ async def main():
                 if not user_text:
                     return
 
+                # 自动判断是否需要搜索
+                is_search = any(keyword in user_text.lower() for keyword in TIME_KEYWORDS)
+                search_results_text = ""
+                search_links = []
+                if is_search:
+                    await message.channel.send(f"Searching for **{user_text}**...")
+                    search_results_text, search_links = await search_tavily(user_text, max_results=5)
+
+                await handle_chat_message(
+                    message=message,
+                    prompt=user_text,
+                    is_search=is_search,
+                    search_results_text=search_results_text,
+                    search_links=search_links,
+                    search_used=is_search
+                )
+                return
+            # 如果是以 # 开头，则继续向下走正常命令处理（不 return）
+
         # --- 原有的 # 开头命令处理逻辑 ---
         if not message.content.startswith("#"):
             return  # 非免前缀频道且不以 # 开头，忽略
@@ -309,6 +328,10 @@ async def main():
                 await message.channel.send("Please specify what to search, e.g., `#search Nvidia stock price` ♪")
                 return
             prompt = query
+        else:
+            prompt = full_command
+            # 自动为时间查询开启搜索
+            
 
         # 搜索预处理
         search_results_text = ""
