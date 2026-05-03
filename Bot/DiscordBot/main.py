@@ -20,7 +20,7 @@ from handlers import (
     handle_learning_commands, handle_knowledge_commands, handle_image_commands,
     get_latest_image_description
 )
-from config import DISCORD_TOKEN, ONLINE_CHANNEL_ID, MAX_HISTORY, MAX_IMAGES_PER_CHANNEL
+from config import DISCORD_TOKEN, ONLINE_CHANNEL_ID, MAX_HISTORY, MAX_IMAGES_PER_CHANNEL, PHILIA093_CHAT_CHANNEL
 
 # ==================== 辅助函数 ====================
 def format_time_suffix():
@@ -32,21 +32,18 @@ async def send_with_time(channel, text: str, **kwargs):
     suffix = f"\n\n:flag_nl:  {format_time_suffix()}"
     full = text + suffix
     if len(full) > 2000:
-        # 如果超出 Discord 限制，优先保证正文完整，不添加后缀
         await channel.send(text, **kwargs)
     else:
         await channel.send(full, **kwargs)
 
 # ==================== 主函数 ====================
 async def main():
-    # 创建 Discord 客户端（现在在异步函数内，有事件循环）
     intents = discord.Intents.default()
     intents.message_content = True
     bot = discord.Client(intents=intents)
 
     # ---------- 辅助函数：发送离线消息 ----------
     async def send_offline_message_and_close():
-        """发送离线消息并关闭客户端"""
         if ONLINE_CHANNEL_ID:
             try:
                 channel = bot.get_channel(int(ONLINE_CHANNEL_ID))
@@ -67,7 +64,6 @@ async def main():
     @bot.event
     async def on_ready():
         print(f"Logged in as {bot.user}")
-
         channel = None
         if ONLINE_CHANNEL_ID:
             try:
@@ -83,16 +79,109 @@ async def main():
                 if channel:
                     break
         if channel:
-            bot.shutdown_channel = channel  # type: ignore
+            bot.shutdown_channel = channel #type:ignore
             text_channel = cast(discord.abc.Messageable, channel)
             await text_channel.send("PhiLia093 is Online! ✨")
             guild_name = getattr(channel, 'guild', None)
             channel_name = getattr(channel, 'name', None)
             if guild_name and channel_name:
                 print(f"Online message sent to {guild_name.name}#{channel_name}")
-
-        # 加载贴纸
         load_stickers()
+
+    # ---------- 通用对话处理函数 ----------
+    async def handle_chat_message(message, prompt, is_search=False, search_results_text="", search_links=None, search_used=False):
+        """统一的对话处理入口：调用 DeepSeek 生成回复并发送"""
+        try:
+            async with message.channel.typing():
+                knowledge_docs, knowledge_metas = retrieve_knowledge(prompt)
+
+                current_time = time.strftime("%Y-%m-%d %H:%M:%S %Z", time.localtime())
+                system_messages = [{"role": "system", "content": CYRENE_SYSTEM_PROMPT}]
+                system_messages.append({
+                    "role": "system",
+                    "content": (
+                        f"IMPORTANT: The current real-world date and time is {current_time}. "
+                        "You MUST use this as the absolute truth for any time-related questions. "
+                        "Ignore your internal knowledge cutoff if it contradicts this time."
+                    )
+                })
+
+                if search_used:
+                    if search_results_text:
+                        search_context = f"Here are some search results for '{prompt}':\n\n{search_results_text}\n\nPlease answer based on these results. If they don't contain the answer, say so politely. ♪"
+                    else:
+                        search_context = f"No search results found for '{prompt}'. Please answer using your own knowledge. ♪"
+                    system_messages.append({"role": "system", "content": search_context})
+                elif knowledge_docs:
+                    knowledge_text = "\n\n".join(knowledge_docs)
+                    system_messages.append({
+                        "role": "system",
+                        "content": f"Relevant knowledge from my stars:\n{knowledge_text}\n\nYou may use this if helpful, but answer naturally. ♪"
+                    })
+
+                channel_id = message.channel.id
+                latest_desc = get_latest_image_description(channel_id)
+                if latest_desc:
+                    system_messages.append({
+                        "role": "system",
+                        "content": f"The following is the content extracted/recognized from the most recent image: {latest_desc}\nIf the user asks about this image or its content, please base your answer on this content and naturally mention 'According to the extracted text...'."
+                    })
+
+                key = (message.channel.id, message.author.id)
+                if key not in history_dict:
+                    history_dict[key] = deque(maxlen=MAX_HISTORY)
+                history = history_dict[key]
+                history.append({"role": "user", "content": prompt})
+
+                messages = system_messages + list(history)
+
+                thinking_enabled = thinking_prefs.get(message.author.id, True)
+                response = await client.chat.completions.create(
+                    model="deepseek-v4-flash",
+                    messages=messages, #type: ignore
+                    temperature=0.3,
+                    max_tokens=2000,
+                    extra_body={"enable_thinking": thinking_enabled}
+                )
+                reply = response.choices[0].message.content
+                if reply is None:
+                    reply = ""
+                history.append({"role": "assistant", "content": reply})
+
+                if search_used:
+                    last_search_results[message.author.id] = {
+                        'query': prompt,
+                        'answer_text': reply,
+                        'links': search_links or []
+                    }
+
+                sticker_match = re.search(r'\[STICKER:\s*(\w+)\]', reply, re.IGNORECASE)
+                clean_reply = reply
+                if sticker_match:
+                    emotion = sticker_match.group(1).lower()
+                    clean_reply = re.sub(r'\[STICKER:\s*\w+\]', '', reply, flags=re.IGNORECASE).strip()
+                    if clean_reply:
+                        await send_with_time(message.channel, clean_reply)
+                    await send_sticker(message.channel, emotion)
+                else:
+                    if reply.strip():
+                        await send_with_time(message.channel, reply)
+                    else:
+                        await message.channel.send("Hmm, I'm not sure what to say... ♪")
+
+                if search_links and len(search_links) > 0:
+                    sources = "\n".join([f"[{i+1}] {url}" for i, url in enumerate(search_links)])
+                    source_msg = f"**Sources:**\n{sources}"
+                    await send_with_time(message.channel, source_msg)
+
+                if not is_search and bot.user and message.author.id != bot.user.id:
+                    last_conversation[message.author.id] = {
+                        'user': prompt,
+                        'bot': reply
+                    }
+
+        except Exception as e:
+            await message.channel.send(f"An error occurred: {e}")
 
     # ---------- 事件：on_message ----------
     @bot.event
@@ -195,16 +284,42 @@ async def main():
             if handled:
                 return
 
-        # 如果不是 # 开头，忽略
-        if not message.content.startswith("#") or message.content.startswith("!"):
-            return
+        # ===== 免前缀频道特殊处理 =====
+        if PHILIA093_CHAT_CHANNEL and message.channel.id == PHILIA093_CHAT_CHANNEL:
+            # 在免前缀频道，非 # 开头的消息直接触发对话
+            if not message.content.startswith('#'):
+                user_text = message.content.strip()
+                if not user_text:
+                    return
+
+                # 自动判断是否需要搜索
+                is_search = any(keyword in user_text.lower() for keyword in TIME_KEYWORDS)
+                search_results_text = ""
+                search_links = []
+                if is_search:
+                    await message.channel.send(f"Searching for **{user_text}**...")
+                    search_results_text, search_links = await search_tavily(user_text, max_results=5)
+
+                await handle_chat_message(
+                    message=message,
+                    prompt=user_text,
+                    is_search=is_search,
+                    search_results_text=search_results_text,
+                    search_links=search_links,
+                    search_used=is_search
+                )
+                return
+            # 如果是以 # 开头，则继续向下走正常命令处理（不 return）
+
+        # --- 原有的 # 开头命令处理逻辑 ---
+        if not message.content.startswith("#"):
+            return  # 非免前缀频道且不以 # 开头，忽略
 
         full_command = message.content[1:].strip()
         if not full_command:
             await message.channel.send("Please say something, like `# What's new in Honkai Star Rail?` ♪")
             return
 
-        # 判断是否为显式搜索命令
         is_search = full_command.lower().startswith("search ")
         if is_search:
             query = full_command[7:].strip()
@@ -214,120 +329,31 @@ async def main():
             prompt = query
         else:
             prompt = full_command
-            is_time_query = any(keyword in prompt.lower() for keyword in TIME_KEYWORDS)
-            if not is_search and is_time_query:
+            # 自动为时间查询开启搜索
+            if any(keyword in prompt.lower() for keyword in TIME_KEYWORDS):
                 is_search = True
                 print("Auto-enabled search for time query")
 
-        # 通用对话处理
-        try:
-            async with message.channel.typing():
-                search_results_text = ""
-                search_links = []
-                search_used = False
+        # 搜索预处理
+        search_results_text = ""
+        search_links = []
+        if is_search:
+            await message.channel.send(f"Searching for **{prompt}**...")
+            search_results_text, search_links = await search_tavily(prompt, max_results=5)
 
-                if is_search:
-                    await message.channel.send(f"Searching for **{prompt}**...")
-                    search_results_text, search_links = await search_tavily(prompt, max_results=5)
-                    search_used = True
-
-                knowledge_docs, knowledge_metas = retrieve_knowledge(prompt)
-
-                current_time = time.strftime("%Y-%m-%d %H:%M:%S %Z", time.localtime())
-                system_messages = [{"role": "system", "content": CYRENE_SYSTEM_PROMPT}]
-                system_messages.append({
-                    "role": "system",
-                    "content": (
-                        f"IMPORTANT: The current real-world date and time is {current_time}. "
-                        "You MUST use this as the absolute truth for any time-related questions. "
-                        "Ignore your internal knowledge cutoff if it contradicts this time."
-                    )
-                })
-
-                if search_used:
-                    if search_results_text:
-                        search_context = f"Here are some search results for '{prompt}':\n\n{search_results_text}\n\nPlease answer based on these results. If they don't contain the answer, say so politely. ♪"
-                    else:
-                        search_context = f"No search results found for '{prompt}'. Please answer using your own knowledge. ♪"
-                    system_messages.append({"role": "system", "content": search_context})
-                elif knowledge_docs:
-                    knowledge_text = "\n\n".join(knowledge_docs)
-                    system_messages.append({
-                        "role": "system",
-                        "content": f"Relevant knowledge from my stars:\n{knowledge_text}\n\nYou may use this if helpful, but answer naturally. ♪"
-                    })
-
-                # 注入最近的图片描述
-                channel_id = message.channel.id  # type: ignore[union-attr]
-                latest_desc = get_latest_image_description(channel_id)
-                if latest_desc:
-                    system_messages.append({
-                        "role": "system",
-                        "content": f"The following is the content extracted/recognized from the most recent image: {latest_desc}\nIf the user asks about this image or its content, please base your answer on this content and naturally mention 'According to the extracted text...'."
-                    })
-
-                # 构建对话历史
-                key = (message.channel.id, message.author.id)  # type: ignore[union-attr]
-                if key not in history_dict:
-                    history_dict[key] = deque(maxlen=MAX_HISTORY)
-                history = history_dict[key]
-                history.append({"role": "user", "content": prompt})
-
-                messages = system_messages + list(history)
-
-                thinking_enabled = thinking_prefs.get(message.author.id, True)
-                response = await client.chat.completions.create(
-                    model="deepseek-v4-flash",
-                    messages=messages,  # type: ignore
-                    temperature=0.3,
-                    max_tokens=2000,
-                    extra_body={"enable_thinking": thinking_enabled}
-                )
-                reply = response.choices[0].message.content
-                if reply is None:
-                    reply = ""
-                history.append({"role": "assistant", "content": reply})
-
-                if search_used:
-                    last_search_results[message.author.id] = {
-                        'query': prompt,
-                        'answer_text': reply,
-                        'links': search_links
-                    }
-
-                # 处理贴纸标记
-                sticker_match = re.search(r'\[STICKER:\s*(\w+)\]', reply, re.IGNORECASE)
-                clean_reply = reply
-                if sticker_match:
-                    emotion = sticker_match.group(1).lower()
-                    clean_reply = re.sub(r'\[STICKER:\s*\w+\]', '', reply, flags=re.IGNORECASE).strip()
-                    if clean_reply:
-                        await send_with_time(message.channel, clean_reply)   # 自动添加时间
-                    await send_sticker(message.channel, emotion)
-                else:
-                    if reply.strip():
-                        await send_with_time(message.channel, reply)         # 自动添加时间
-                    else:
-                        await message.channel.send("Hmm, I'm not sure what to say... ♪")
-
-                if search_links:
-                    sources = "\n".join([f"[{i+1}] {url}" for i, url in enumerate(search_links)])
-                    source_msg = f"**Sources:**\n{sources}"
-                    await send_with_time(message.channel, source_msg)        # 来源也可带时间
-
-                # 修复：bot.user 可能为 None，添加判断
-                if not is_search and bot.user and message.author.id != bot.user.id:
-                    last_conversation[message.author.id] = {
-                        'user': prompt,
-                        'bot': reply
-                    }
-
-        except Exception as e:
-            await message.channel.send(f"An error occurred: {e}")
+        # 调用统一对话处理函数
+        await handle_chat_message(
+            message=message,
+            prompt=prompt,
+            is_search=is_search,
+            search_results_text=search_results_text,
+            search_links=search_links,
+            search_used=is_search
+        )
 
     # ---------- 启动 Bot ----------
     try:
-        await bot.start(DISCORD_TOKEN) #type:ignore
+        await bot.start(DISCORD_TOKEN) #type: ignore
     except asyncio.CancelledError:
         print("Bot cancelled (likely Ctrl+C), sending offline message...")
         await send_offline_message_and_close()
