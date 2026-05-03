@@ -1,15 +1,16 @@
 import os
 from dotenv import load_dotenv
+from pathlib import Path
 
 # 加载 .env 文件到环境变量
-load_dotenv()
+env_path = Path(__file__).resolve().parent / '.env'
+load_dotenv(env_path)
 
 # API Keys（去掉默认值，强制必须配置）
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
 ALIYUN_API_KEY = os.getenv("ALIYUN_API_KEY")
-PHILIA093_CHAT_CHANNEL = os.getenv("PHILIA093_CHAT_CHANNEL","0")
 
 # 检查必要的密钥是否存在，缺失则报错并退出
 if not DISCORD_TOKEN:
@@ -18,7 +19,11 @@ if not DEEPSEEK_API_KEY:
     raise ValueError("环境变量 DEEPSEEK_API_KEY 未设置！")
 
 # Discord Channel IDs
-ONLINE_CHANNEL_ID = 1485737959792578704
+ONLINE_CHANNEL_ID = int(os.getenv("PHILIA093_CHAT_CHANNEL", "0"))
+PHILIA093_CHAT_CHANNEL = int(os.getenv("PHILIA093_CHAT_CHANNEL", "0"))
+
+# 添加调试打印，确认读取到的值
+print(f"[CONFIG] PHILIA093_CHAT_CHANNEL = {PHILIA093_CHAT_CHANNEL}")
 
 # Paths
 CHROMA_PATH = "./chroma_knowledge"
