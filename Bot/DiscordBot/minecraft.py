@@ -218,13 +218,17 @@ def format_change(payload: dict) -> str:
     state = payload.get("state")
     previous = payload.get("previous")
     name = payload.get("name", "?")
+    software = (payload.get("software") or "").strip()
+    version = f" · {software}" if software else ""
+
     if state == "online" and previous != "online":
         return (
             f"🟢 **Minecraft Server: {name} is up!**\n"
-            f"`{payload.get('address', '?')}` · players {format_players(payload)} ♪"
+            f"`{payload.get('address', '?')}` · players {format_players(payload)}"
+            f"{version} ♪"
         )
     if previous == "online" and state != "online":
-        return f"💤 **Minecraft Server: {name} is offline** ♪"
+        return f"💤 **Minecraft Server: {name} is offline**{version} ♪"
     return ""
 
 
