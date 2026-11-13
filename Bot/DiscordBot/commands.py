@@ -682,8 +682,8 @@ async def _handle_minecraft(message: discord.Message, body: str) -> None:
             return
         await channel.send(
             f"⛏️ **{info['address']}**\n"
-            f"状态：`{info['status']}` · 在线：{mc._format_players(info)}\n"
-            f"版本：{info['software']}"
+            f"State: `{info['state']}` · players: {mc._format_players(info)}\n"
+            f"Software: {info['software']}"
         )
         return
 
@@ -701,12 +701,12 @@ async def _handle_minecraft(message: discord.Message, body: str) -> None:
         if info.get("already"):
             await channel.send(
                 f"⛏️ It is already running: `{info['address']}` "
-                f"({info.get('players', 0)}/{info.get('slots', '?')} 人) ♪"
+                f"({info.get('players', 0)}/{info.get('slots', '?')} players) ♪"
             )
             return
 
         await channel.send(
-            f"🕹️ Start request sent to Aternos (status: `{info.get('status')}`）。\n"
+            f"🕹️ Start request sent to Aternos (state: `{info.get('state')}`).\n"
             f"I will watch it and ping you the moment it is up ♪"
         )
         if not mc.spawn_watcher(channel):
