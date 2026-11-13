@@ -39,10 +39,15 @@ def build_client():
     username = os.environ.get("ATERNOS_USERNAME", "").strip()
     password = os.environ.get("ATERNOS_PASSWORD", "").strip()
 
+    client = Client()
+    # python-aternos 3.0.x exposes login()/login_with_session() instead of the
+    # from_credentials()/from_session() helpers shown in the 3.1 docs.
     if session:
-        return Client.from_session(session)
+        client.login_with_session(session)
+        return client
     if username and password:
-        return Client.from_credentials(username, password)
+        client.login(username, password)
+        return client
     raise RuntimeError(
         "Aternos credentials missing: set ATERNOS_USERNAME/ATERNOS_PASSWORD "
         "(or ATERNOS_SESSION) in .env"
