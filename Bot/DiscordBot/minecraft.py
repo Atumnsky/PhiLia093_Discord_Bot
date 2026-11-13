@@ -213,6 +213,21 @@ async def start(server: str | None = None) -> dict:
     return await daemon().request("start", server=server, timeout=180)
 
 
+def format_change(payload: dict) -> str:
+    """Build the Discord text for an online/offline transition ('' if neither)."""
+    state = payload.get("state")
+    previous = payload.get("previous")
+    name = payload.get("name", "?")
+    if state == "online" and previous != "online":
+        return (
+            f"🟢 **Minecraft Server: {name} is up!**\n"
+            f"`{payload.get('address', '?')}` · players {format_players(payload)} ♪"
+        )
+    if previous == "online" and state != "online":
+        return f"💤 **Minecraft Server: {name} is offline** ♪"
+    return ""
+
+
 async def start_announcer(bot) -> None:
     """Wire daemon state changes to Discord and bring the daemon up."""
     if not configured():
@@ -223,19 +238,9 @@ async def start_announcer(bot) -> None:
         channel = bot.get_channel(settings.minecraft_channel)
         if channel is None:
             return
-        state = payload.get("state")
-        previous = payload.get("previous")
-        if state == "online" and previous != "online":
-            await channel.send(
-                f"🟢 **{payload['name']} is up!**\n"
-                f"`{payload['address']}` · players {format_players(payload)} ♪",
-                allowed_mentions=discord.AllowedMentions.none(),
-            )
-        elif previous == "online" and state != "online":
-            await channel.send(
-                f"💤 **{payload['name']}** went offline ♪",
-                allowed_mentions=discord.AllowedMentions.none(),
-            )
+        text = format_change(payload)
+        if text:
+            await channel.send(text, allowed_mentions=discord.AllowedMentions.none())
 
     client = daemon()
     client.on_change = on_change
