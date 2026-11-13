@@ -103,6 +103,7 @@ class Settings:
     aternos_session: str
     aternos_server: str
     aternos_python: str
+    aternos_poll: int
     minecraft_channel: int
 
     # --- Paths ---
@@ -186,6 +187,7 @@ def load_settings() -> Settings:
         aternos_session=_raw("ATERNOS_SESSION"),
         aternos_server=_raw("ATERNOS_SERVER"),
         aternos_python=_raw("ATERNOS_PYTHON"),
+        aternos_poll=max(20, _int("ATERNOS_POLL", 60)),
         minecraft_channel=_int("MINECRAFT_CHANNEL_ID") or (chat_channels[0] if chat_channels else 0),
         data_dir=data_dir,
         chroma_dir=Path(_str("CHROMA_PATH", str(BASE_DIR / "chroma_knowledge"))),

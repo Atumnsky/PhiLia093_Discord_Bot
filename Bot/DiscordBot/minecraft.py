@@ -1,9 +1,11 @@
 """Aternos Minecraft server control for Discord commands.
 
-The heavy lifting (login, Cloudflare bypass, start, polling) happens in
-`aternos_helper.py`, which needs a Python able to run `python-aternos` (3.10/3.11
-- js2py has no 3.12 support). This module only shells out to it and formats the
-answer for Discord.
+`aternos_helper.py` runs as a small daemon in a Python 3.11 environment (the
+`python-aternos` library needs js2py, which does not work on 3.12). It logs in
+once, polls the servers, and prints a JSON line whenever a server changes state.
+
+This module keeps that daemon alive, turns its events into Discord
+announcements, and sends it status/start requests.
 """
 
 from __future__ import annotations
@@ -21,13 +23,12 @@ log = logging.getLogger(__name__)
 
 HERE = Path(__file__).resolve().parent
 HELPER = HERE / "aternos_helper.py"
-START_TIMEOUT = 20 * 60
 FALLBACK_PYTHONS = (
     "/home/ubuntu/aternos-env/bin/python",
     "/opt/aternos-env/bin/python",
 )
 
-_watcher: asyncio.Task | None = None
+_client: "AternosDaemon | None" = None
 
 
 class MCError(RuntimeError):
@@ -58,64 +59,128 @@ def _environment() -> dict[str, str]:
             "ATERNOS_PASSWORD": settings.aternos_password,
             "ATERNOS_SESSION": settings.aternos_session,
             "ATERNOS_SERVER": settings.aternos_server,
+            "ATERNOS_POLL": str(settings.aternos_poll),
         }
     )
     return env
 
 
-async def _run(*args: str, timeout: float) -> dict:
-    interpreter = python_path()
-    log.info("Aternos helper: %s %s", interpreter, " ".join(args))
-    try:
-        process = await asyncio.create_subprocess_exec(
+class AternosDaemon:
+    """Owns the helper subprocess and multiplexes requests over stdin/stdout."""
+
+    def __init__(self, on_change=None) -> None:
+        self._process: asyncio.subprocess.Process | None = None
+        self._pending: dict[int, asyncio.Future] = {}
+        self._sequence = 0
+        self._lock = asyncio.Lock()
+        self._reader: asyncio.Task | None = None
+        self._stderr: asyncio.Task | None = None
+        self.on_change = on_change
+
+    async def ensure(self) -> None:
+        if self._process is not None and self._process.returncode is None:
+            return
+        interpreter = python_path()
+        log.info("Starting Aternos daemon with %s", interpreter)
+        self._process = await asyncio.create_subprocess_exec(
             interpreter,
             str(HELPER),
-            *args,
+            "serve",
+            stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             env=_environment(),
         )
-    except FileNotFoundError as exc:
-        raise MCError(f"Aternos helper interpreter not found: {interpreter}") from exc
+        self._reader = asyncio.create_task(self._read_stdout())
+        self._stderr = asyncio.create_task(self._read_stderr())
 
-    try:
-        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout)
-    except asyncio.TimeoutError as exc:
-        process.kill()
-        raise MCError("Aternos request timed out") from exc
+    async def _read_stdout(self) -> None:
+        assert self._process is not None and self._process.stdout is not None
+        while True:
+            line = await self._process.stdout.readline()
+            if not line:
+                break
+            try:
+                payload = json.loads(line.decode("utf-8", "replace"))
+            except json.JSONDecodeError:
+                continue
 
-    out = stdout.decode("utf-8", "replace").strip()
-    err = stderr.decode("utf-8", "replace").strip()
-    if err:
-        log.debug("Aternos helper stderr: %s", err[-800:])
+            if payload.get("event") == "change":
+                await self._emit_change(payload)
+                continue
 
-    if not out:
-        raise MCError("Aternos helper returned nothing" + (f": {err[-200:]}" if err else ""))
+            future = self._pending.pop(payload.get("id"), None)
+            if future is not None and not future.done():
+                future.set_result(payload)
 
-    line = out.splitlines()[-1]
-    try:
-        payload = json.loads(line)
-    except json.JSONDecodeError as exc:
-        raise MCError(f"Aternos helper returned junk: {line[:200]}") from exc
+        for future in self._pending.values():
+            if not future.done():
+                future.set_exception(MCError("Aternos daemon stopped"))
+        self._pending.clear()
 
-    if not payload.get("ok"):
-        raise MCError(payload.get("error") or "Aternos returned an error")
-    return payload
+    async def _read_stderr(self) -> None:
+        assert self._process is not None and self._process.stderr is not None
+        while True:
+            line = await self._process.stderr.readline()
+            if not line:
+                break
+            log.debug("aternos: %s", line.decode("utf-8", "replace").strip())
+
+    async def _emit_change(self, payload: dict) -> None:
+        if self.on_change is None:
+            return
+        try:
+            await self.on_change(payload)
+        except Exception:
+            log.exception("Aternos change handler failed")
+
+    async def request(self, command: str, server: str | None = None, timeout: float = 120) -> dict:
+        if not configured():
+            raise MCError(
+                "Aternos is not configured: set ATERNOS_USERNAME / ATERNOS_PASSWORD in .env"
+            )
+
+        async with self._lock:
+            await self.ensure()
+            assert self._process is not None and self._process.stdin is not None
+            self._sequence += 1
+            request_id = self._sequence
+            future: asyncio.Future = asyncio.get_running_loop().create_future()
+            self._pending[request_id] = future
+
+            message: dict = {"id": request_id, "cmd": command}
+            if server:
+                message["server"] = server
+            self._process.stdin.write((json.dumps(message) + "\n").encode())
+            await self._process.stdin.drain()
+
+        try:
+            payload = await asyncio.wait_for(future, timeout)
+        except asyncio.TimeoutError as exc:
+            raise MCError("Aternos request timed out") from exc
+        finally:
+            self._pending.pop(request_id, None)
+
+        if not payload.get("ok"):
+            raise MCError(payload.get("error") or "Aternos returned an error")
+        return payload
+
+    async def close(self) -> None:
+        if self._process is not None and self._process.returncode is None:
+            try:
+                self._process.terminate()
+            except ProcessLookupError:
+                pass
 
 
-async def status() -> dict:
-    if not configured():
-        raise MCError("Aternos is not configured: set ATERNOS_USERNAME / ATERNOS_PASSWORD in .env")
-    return await _run("status", timeout=90)
+def daemon() -> AternosDaemon:
+    global _client
+    if _client is None:
+        _client = AternosDaemon()
+    return _client
 
 
-async def start() -> dict:
-    if not configured():
-        raise MCError("Aternos is not configured: set ATERNOS_USERNAME / ATERNOS_PASSWORD in .env")
-    return await _run("start", timeout=120)
-
-
-def _format_players(info: dict) -> str:
+def format_players(info: dict) -> str:
     names = info.get("names") or []
     players = info.get("players", 0)
     slots = info.get("slots", "?")
@@ -124,30 +189,50 @@ def _format_players(info: dict) -> str:
     return f"{players}/{slots}"
 
 
-async def watch_until_online(channel) -> None:
-    """Wait for the server to come up (the helper polls Aternos) and report."""
-    try:
-        info = await _run("wait", str(START_TIMEOUT), timeout=START_TIMEOUT + 120)
-    except MCError as exc:
-        await channel.send(f"⌛ The server did not come up: {exc}")
-        return
-    except Exception as exc:  # noqa: BLE001
-        log.exception("Aternos wait failed")
-        await channel.send(f"⌛ Error while waiting for the server: {exc}")
-        return
-
-    await channel.send(
-        f"✅ **The server is up!**\n"
-        f"Address: `{info['address']}`\n"
-        f"Players: {_format_players(info)}\n"
-        f"Version: {info.get('software', '?')} · took {info.get('elapsed', '?')}s ♪\n"
-        f"Come join~"
+def format_status(info: dict) -> str:
+    icon = "🟢" if info.get("state") == "online" else "⚪"
+    return (
+        f"{icon} **{info['name']}** (`{info['address']}`)\n"
+        f"　状态 `{info['state']}` · 在线 {format_players(info)} · {info.get('software', '?')}"
     )
 
 
-def spawn_watcher(channel) -> bool:
-    global _watcher
-    if _watcher is not None and not _watcher.done():
-        return False
-    _watcher = asyncio.create_task(watch_until_online(channel))
-    return True
+async def list_status() -> list[dict]:
+    payload = await daemon().request("list", timeout=120)
+    return payload.get("servers", [])
+
+
+async def start(server: str | None = None) -> dict:
+    return await daemon().request("start", server=server, timeout=180)
+
+
+async def start_announcer(bot) -> None:
+    """Wire daemon state changes to Discord and bring the daemon up."""
+    if not configured():
+        log.info("Aternos is not configured, #mc will stay disabled")
+        return
+
+    async def on_change(payload: dict) -> None:
+        channel = bot.get_channel(settings.minecraft_channel)
+        if channel is None:
+            return
+        state = payload.get("state")
+        previous = payload.get("previous")
+        if state == "online" and previous != "online":
+            await channel.send(
+                f"🟢 **{payload['name']} 开好了！**\n"
+                f"`{payload['address']}` · 在线 {format_players(payload)} ♪"
+            )
+        elif previous == "online" and state != "online":
+            await channel.send(f"💤 **{payload['name']}** 下线了 ♪")
+
+    client = daemon()
+    client.on_change = on_change
+    try:
+        servers = await list_status()
+        log.info(
+            "Aternos: watching %s",
+            ", ".join(f"{s['name']}({s['state']})" for s in servers),
+        )
+    except Exception as exc:
+        log.warning("Could not query Aternos at startup: %s", exc)

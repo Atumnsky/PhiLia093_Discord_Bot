@@ -668,11 +668,15 @@ async def _handle_minecraft(message: discord.Message, body: str) -> None:
         if argument.lower().startswith(prefix):
             argument = argument[len(prefix) :]
             break
-    argument = argument.strip().lower()
+    argument = argument.strip()
 
-    if argument in {"", "status", "s"}:
+    action, _, target = argument.partition(" ")
+    action = action.lower().strip()
+    target = target.strip() or None
+
+    if action in {"", "status", "s", "list", "ls"}:
         try:
-            info = await mc.status()
+            servers = await mc.list_status()
         except mc.MCError as exc:
             await channel.send(f"⛏️ {exc}")
             return
@@ -680,16 +684,17 @@ async def _handle_minecraft(message: discord.Message, body: str) -> None:
             log.warning("Aternos status failed: %s", exc)
             await channel.send(f"⛏️ Could not reach Aternos: {exc}")
             return
+        if not servers:
+            await channel.send("⛏️ 这个 Aternos 账号下看不到任何服务器")
+            return
         await channel.send(
-            f"⛏️ **{info['address']}**\n"
-            f"State: `{info['state']}` · players: {mc._format_players(info)}\n"
-            f"Software: {info['software']}"
+            "⛏️ **Minecraft servers**\n" + "\n".join(mc.format_status(s) for s in servers)
         )
         return
 
-    if argument in {"start", "on", "up"}:
+    if action in {"start", "on", "up"}:
         try:
-            info = await mc.start()
+            info = await mc.start(target)
         except mc.MCError as exc:
             await channel.send(f"⛏️ {exc}")
             return
@@ -700,21 +705,19 @@ async def _handle_minecraft(message: discord.Message, body: str) -> None:
 
         if info.get("already"):
             await channel.send(
-                f"⛏️ It is already running: `{info['address']}` "
-                f"({info.get('players', 0)}/{info.get('slots', '?')} players) ♪"
+                f"🟢 **{info['name']}** is already online: `{info['address']}` "
+                f"({mc.format_players(info)}) ♪"
             )
             return
 
         await channel.send(
-            f"🕹️ Start request sent to Aternos (state: `{info.get('state')}`).\n"
-            f"I will watch it and ping you the moment it is up ♪"
+            f"🕹️ 已经给 **{info['name']}** 发了启动请求（当前 `{info.get('state')}`）。\n"
+            f"它一上线我就来这里说一声 ♪"
         )
-        if not mc.spawn_watcher(channel):
-            await channel.send("(already watching, no need to click twice)")
         return
 
     await channel.send(
-        "Usage: `#mc start` to boot the server, `#mc status` to check it ♪"
+        "用法：`#mc status` 看所有服务器 · `#mc start [名字]` 启动服务器 ♪"
     )
 
 

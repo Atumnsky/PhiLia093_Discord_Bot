@@ -16,6 +16,7 @@ from logging.handlers import RotatingFileHandler
 import discord
 
 import commands
+import minecraft
 import news
 import stickers
 from config import settings
@@ -24,6 +25,7 @@ log = logging.getLogger("philia")
 
 _chat_channels: list[int] = []
 _news_started = False
+_mc_started = False
 
 
 def resolve_chat_channels(bot: discord.Client) -> list[int]:
@@ -142,7 +144,7 @@ async def run() -> None:
 
     @bot.event
     async def on_ready() -> None:
-        global _chat_channels, _news_started
+        global _chat_channels, _news_started, _mc_started
         _chat_channels = resolve_chat_channels(bot)
         log.info("Logged in as %s (id=%s)", bot.user, getattr(bot.user, "id", "?"))
         log.info(
@@ -159,6 +161,10 @@ async def run() -> None:
             _news_started = True
             fallback = _chat_channels[0] if _chat_channels else 0
             asyncio.create_task(news.scheduler(bot, fallback))
+
+        if not _mc_started:
+            _mc_started = True
+            asyncio.create_task(minecraft.start_announcer(bot))
         channel = pick_online_channel(bot)
         if settings.status_messages:
             await announce(bot, "PhiLia093 is Online! ✨")
@@ -197,6 +203,10 @@ async def run() -> None:
         stopping.set()
         log.info("Shutting down...")
         await announce(bot, "PhiLia093 is Offline! 👋")
+        try:
+            await minecraft.daemon().close()
+        except Exception:
+            pass
         await bot.close()
 
     loop = asyncio.get_running_loop()
