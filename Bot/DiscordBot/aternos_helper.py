@@ -49,6 +49,20 @@ def log(message: str) -> None:
 
 def build_client():
     from python_aternos import Client
+    from python_aternos.atconnect import AternosConnect
+
+    # The library defaults to a 4 second timeout, which is too short for
+    # start/stop requests; widen it once for the whole process.
+    if not getattr(AternosConnect.request_cloudflare, "_philia_patched", False):
+        original = AternosConnect.request_cloudflare
+
+        def patched(self, url, method, **kwargs):
+            kwargs.setdefault("timeout", 30)
+            kwargs.setdefault("retries", 3)
+            return original(self, url, method, **kwargs)
+
+        patched._philia_patched = True  # type: ignore[attr-defined]
+        AternosConnect.request_cloudflare = patched  # type: ignore[assignment]
 
     session = os.environ.get("ATERNOS_SESSION", "").strip()
     username = os.environ.get("ATERNOS_USERNAME", "").strip()
@@ -137,6 +151,14 @@ def snapshot(server) -> dict:
     }
 
 
+def _subdomain(server) -> str:
+    """server.subdomain reads _info['ip'] and explodes when the cache is empty."""
+    try:
+        return getattr(server, "subdomain", "") or ""
+    except Exception:
+        return ""
+
+
 def pick_server(servers, wanted: str | None):
     if not wanted:
         configured = os.environ.get("ATERNOS_SERVER", "").strip()
@@ -153,7 +175,7 @@ def pick_server(servers, wanted: str | None):
                 info.get("name"),
                 info.get("ip"),
                 server.servid,
-                getattr(server, "subdomain", ""),
+                _subdomain(server),
             )
             if part
         ).lower()
@@ -163,7 +185,7 @@ def pick_server(servers, wanted: str | None):
 
 
 def announce_name(server) -> str:
-    return getattr(server, "_info", {}).get("name") or server.subdomain or server.servid
+    return getattr(server, "_info", {}).get("name") or _subdomain(server) or server.servid
 
 
 # --------------------------------------------------------------------------
