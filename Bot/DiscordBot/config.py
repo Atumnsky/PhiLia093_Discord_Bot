@@ -47,11 +47,19 @@ def _ids(key: str) -> tuple[int, ...]:
     return tuple(found)
 
 
+def _names(key: str, default: str = "") -> tuple[str, ...]:
+    raw = _raw(key) or default
+    return tuple(
+        part.strip().lower() for part in raw.replace(";", ",").split(",") if part.strip()
+    )
+
+
 @dataclass(frozen=True)
 class Settings:
     # --- Discord ---
     discord_token: str
     chat_channels: tuple[int, ...]
+    chat_channel_names: tuple[str, ...]
     online_channel: int
     max_history: int
     timestamp_suffix: bool
@@ -113,6 +121,9 @@ def load_settings() -> Settings:
     settings = Settings(
         discord_token=_raw("DISCORD_TOKEN"),
         chat_channels=chat_channels,
+        chat_channel_names=_names(
+            "CHAT_CHANNEL_NAMES", "cyrene-chat,philia093-chat,philia-chat"
+        ),
         online_channel=online_channel,
         max_history=max(2, _int("MAX_HISTORY", 30)),
         timestamp_suffix=_bool("TIMESTAMP_SUFFIX", True),

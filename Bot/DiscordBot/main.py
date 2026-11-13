@@ -22,6 +22,39 @@ from config import settings
 log = logging.getLogger("philia")
 
 _offline_sent = False
+_chat_channels: list[int] = []
+
+
+def resolve_chat_channels(bot: discord.Client) -> list[int]:
+    """Configured IDs that still exist, else a channel found by name."""
+    found: list[int] = []
+    for channel_id in settings.chat_channels:
+        if bot.get_channel(channel_id) is not None:
+            found.append(channel_id)
+        else:
+            log.warning(
+                "Chat channel %s does not exist any more - ignoring it", channel_id
+            )
+    if found:
+        return found
+
+    for guild in bot.guilds:
+        for name in settings.chat_channel_names:
+            channel = discord.utils.get(guild.text_channels, name=name)
+            if channel is not None:
+                found.append(channel.id)
+                log.info("Auto-detected chat channel #%s (id=%s)", channel.name, channel.id)
+                break
+        if found:
+            break
+
+    if not found:
+        log.warning(
+            "No chat channel found - plain messages will be ignored. Set "
+            "PHILIA093_CHAT_CHANNEL, or create a channel named #%s.",
+            settings.chat_channel_names[0] if settings.chat_channel_names else "cyrene-chat",
+        )
+    return found
 
 
 def setup_logging() -> None:
@@ -54,7 +87,7 @@ def setup_logging() -> None:
 
 def pick_online_channel(bot: discord.Client) -> discord.abc.Messageable | None:
     """ONLINE_CHANNEL_ID, else the first chat channel, else any writable channel."""
-    candidates = [settings.online_channel, *settings.chat_channels]
+    candidates = [settings.online_channel, *_chat_channels, *settings.chat_channels]
     for channel_id in candidates:
         if not channel_id:
             continue
@@ -101,7 +134,13 @@ async def run() -> None:
 
     @bot.event
     async def on_ready() -> None:
+        global _chat_channels
+        _chat_channels = resolve_chat_channels(bot)
         log.info("Logged in as %s (id=%s)", bot.user, getattr(bot.user, "id", "?"))
+        log.info(
+            "Chat channels: %s",
+            ", ".join(str(c) for c in _chat_channels) or "none",
+        )
         await bot.change_presence(
             activity=discord.Activity(
                 type=discord.ActivityType.listening, name="#help ♪"
@@ -132,7 +171,7 @@ async def run() -> None:
                 return
 
             content = message.content.strip()
-            in_chat_channel = message.channel.id in settings.chat_channels
+            in_chat_channel = message.channel.id in _chat_channels
 
             if in_chat_channel and not content.startswith("#"):
                 if content:
