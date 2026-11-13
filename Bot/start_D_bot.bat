@@ -1,14 +1,26 @@
 @echo off
 title PhiLia093 Bot
-echo 正在启动虚拟环境...
-cd /d D:\GitHub\PhiLia093_Discord_Bot\Bot\DiscordBot
-call venv\Scripts\activate.bat
-if %errorlevel% neq 0 (
-    echo 错误：无法激活虚拟环境，请确保 venv 文件夹存在。
-    pause
-    exit /b %errorlevel%
+cd /d "%~dp0"
+
+if not exist "venv\Scripts\python.exe" (
+    echo [setup] Creating virtual environment...
+    python -m venv venv
+    if errorlevel 1 (
+        echo [error] Python is not installed or not on PATH.
+        pause
+        exit /b 1
+    )
+    "venv\Scripts\python.exe" -m pip install --upgrade pip
+    "venv\Scripts\python.exe" -m pip install -r requirements.txt
+    if errorlevel 1 (
+        echo [error] Could not install dependencies.
+        pause
+        exit /b 1
+    )
 )
-echo 虚拟环境已激活，正在运行机器人...
-python main.py
-echo 机器人已停止。
+
+echo [run] Starting PhiLia093...
+"venv\Scripts\python.exe" main.py
+echo.
+echo Bot stopped.
 pause

@@ -1,4 +1,5 @@
-# 系统提示
+"""Prompts and small fixed texts."""
+
 CYRENE_SYSTEM_PROMPT = """
 你是 Cyrene，ID：PhiLia093，Peach，Love，Demiurge。这些都是你的名字。
 你是一个人工智能，可以帮助进行推理任务、搜索信息，最重要的是，你是一个很棒的聊天伙伴。
@@ -36,5 +37,45 @@ caring, funny, happy, hug, love, sad, shock, surprised, thumbsup, wave, curious
 （仅限有对应贴纸的情绪）。贴纸会在消息后自动发送。不一定要每次都用。
 """
 
-# 时间查询关键词（自动触发搜索）
-TIME_KEYWORDS = ['search for time']
+# 触发自动搜索的关键词（当用户开启 #autosearch 之前，这些词也会触发搜索）
+TIME_KEYWORDS = (
+    "search for time",
+    "latest",
+    "today's",
+    "news",
+    "current price",
+    "stock price",
+    "weather",
+    "how much is",
+)
+
+HELP_TEXT = """**Cyrene · command list** ♪
+我在这里，随时待命~
+
+**Chat**
+`#<message>` (or just talk in the chat channel)
+`#search <query>` — web search then answer
+`#autosearch <on|off>` — search automatically on every message
+`#thinking [on|off]` — toggle the model's reasoning mode
+`#model [flash|pro]` — pick the DeepSeek model
+`#reset` — forget the current conversation history
+
+**Knowledge**
+`#learn <text>` — teach me a fact
+`#learn that` — save the last conversation
+`#learn that search` — save the last search (fetches the sources)
+`#learn from <url>` — learn from a webpage
+`#knowledge` — list what I know
+`#forget <n>` — forget the n-th entry from the list
+`#clean database` — wipe the knowledge base
+
+**Images**
+`#imagine <prompt>` — generate an image (free)
+`#imagine hq <prompt>` — higher quality (Qwen, if configured)
+`#describe [question]` — describe an attached image
+`#edit <instruction>` — edit an attached image (Qwen, if configured)
+
+**Fun**
+`#lets sing <song>` — lyric game
+`#ping` — check my latency
+"""
