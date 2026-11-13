@@ -28,6 +28,7 @@ import time
 POLL = max(20, int(os.environ.get("ATERNOS_POLL", "60") or 60))
 STATUS_RE = re.compile(r"var lastStatus\s*?=\s*?(\{.+?\});?\s*</script>")
 ONLINE_STATES = {"online"}
+SESSION_FILE = os.path.expanduser("~/.philia_aternos_session")
 
 _print_lock = threading.Lock()
 
@@ -65,20 +66,54 @@ def build_client():
         AternosConnect.request_cloudflare = patched  # type: ignore[assignment]
 
     session = os.environ.get("ATERNOS_SESSION", "").strip()
+    if not session and os.path.exists(SESSION_FILE):
+        try:
+            session = open(SESSION_FILE, encoding="utf-8").read().strip()
+            log("using stored Aternos session")
+        except OSError:
+            session = ""
     username = os.environ.get("ATERNOS_USERNAME", "").strip()
     password = os.environ.get("ATERNOS_PASSWORD", "").strip()
 
     client = Client()
     if session:
         client.login_with_session(session)
-        return client
+        try:
+            list_servers(client)  # validates the cookie
+            return client
+        except Exception as exc:  # noqa: BLE001
+            log(f"stored session rejected: {exc}")
+
     if username and password:
-        client.login(username, password)
+        try:
+            client.login(username, password)
+        except Exception as exc:  # noqa: BLE001
+            raise RuntimeError(
+                "Aternos login failed: "
+                + str(exc)
+                + " — Aternos asks for a captcha on datacenter IPs; log in in a "
+                "browser and set ATERNOS_SESSION instead."
+            ) from exc
+        save_session(client)
         return client
+
     raise RuntimeError(
-        "Aternos credentials missing: set ATERNOS_USERNAME/ATERNOS_PASSWORD "
-        "(or ATERNOS_SESSION) in .env"
+        "Aternos credentials missing: set ATERNOS_SESSION (preferred) or "
+        "ATERNOS_USERNAME/ATERNOS_PASSWORD in .env"
     )
+
+
+def save_session(client) -> None:
+    """Persist the session cookie so restarts do not need a fresh login."""
+    try:
+        cookie = client.atconn.session.cookies.get("ATERNOS_SESSION")
+        if cookie:
+            with open(SESSION_FILE, "w", encoding="utf-8") as handle:
+                handle.write(cookie)
+            os.chmod(SESSION_FILE, 0o600)
+            log("saved Aternos session cookie")
+    except Exception as exc:  # noqa: BLE001
+        log(f"could not save session: {exc}")
 
 
 def list_servers(client):
