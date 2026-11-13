@@ -1,28 +1,32 @@
-"""Aternos Minecraft server control.
+"""Aternos Minecraft server control for Discord commands.
 
-Uses the unofficial `python-aternos` library (pip install python-aternos).
-It logs in with the account credentials from .env and talks to Aternos' private
-web API, so it can start a server and report when it is actually online.
-
-Note: Aternos' ToS forbids automated access. Use at your own risk.
+The heavy lifting (login, Cloudflare bypass, start, polling) happens in
+`aternos_helper.py`, which needs a Python able to run `python-aternos` (3.10/3.11
+- js2py has no 3.12 support). This module only shells out to it and formats the
+answer for Discord.
 """
 
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
-import threading
-import time
+import os
+import sys
+from pathlib import Path
 
 from config import settings
 
 log = logging.getLogger(__name__)
 
-START_TIMEOUT = 20 * 60  # Aternos queues can be long
-POLL_INTERVAL = 15
+HERE = Path(__file__).resolve().parent
+HELPER = HERE / "aternos_helper.py"
+START_TIMEOUT = 20 * 60
+FALLBACK_PYTHONS = (
+    "/home/ubuntu/aternos-env/bin/python",
+    "/opt/aternos-env/bin/python",
+)
 
-_client = None
-_client_lock = threading.Lock()
 _watcher: asyncio.Task | None = None
 
 
@@ -37,100 +41,78 @@ def configured() -> bool:
     )
 
 
-def _get_client():
-    global _client
-    try:
-        from python_aternos import Client
-    except ImportError as exc:
-        raise MCError(
-            "python-aternos is not installed: pip install python-aternos"
-        ) from exc
-
-    with _client_lock:
-        if _client is None:
-            if settings.aternos_session:
-                _client = Client.from_session(settings.aternos_session)
-            elif settings.aternos_username and settings.aternos_password:
-                _client = Client.from_credentials(
-                    settings.aternos_username, settings.aternos_password
-                )
-            else:
-                raise MCError(
-                    "Aternos is not configured: set ATERNOS_USERNAME / ATERNOS_PASSWORD in .env"
-                )
-        return _client
+def python_path() -> str:
+    if settings.aternos_python:
+        return settings.aternos_python
+    for candidate in FALLBACK_PYTHONS:
+        if Path(candidate).exists():
+            return candidate
+    return sys.executable
 
 
-def _pick_server(client):
-    servers = client.list_servers()
-    if not servers:
-        raise MCError("This Aternos account has no servers")
-
-    wanted = (settings.aternos_server or "").lower().strip()
-    if wanted:
-        for server in servers:
-            haystack = f"{server.address} {server.subdomain or ''}".lower()
-            if wanted in haystack:
-                return server
-    return servers[0]
-
-
-def _status_sync() -> dict:
-    server = _pick_server(_get_client())
-    server.fetch()
-    return {
-        "address": f"{server.domain}:{server.port}",
-        "status": server.status,
-        "players": server.players_count,
-        "slots": server.slots,
-        "names": list(server.players_list or []),
-        "software": f"{server.software} {server.version}",
-    }
-
-
-def _start_sync() -> dict:
-    server = _pick_server(_get_client())
-    server.fetch()
-    if server.status == "online":
-        return {
-            "address": f"{server.domain}:{server.port}",
-            "status": "online",
-            "already": True,
-            "players": server.players_count,
-            "slots": server.slots,
-            "names": list(server.players_list or []),
-            "software": f"{server.software} {server.version}",
+def _environment() -> dict[str, str]:
+    env = dict(os.environ)
+    env.update(
+        {
+            "ATERNOS_USERNAME": settings.aternos_username,
+            "ATERNOS_PASSWORD": settings.aternos_password,
+            "ATERNOS_SESSION": settings.aternos_session,
+            "ATERNOS_SERVER": settings.aternos_server,
         }
+    )
+    return env
+
+
+async def _run(*args: str, timeout: float) -> dict:
+    interpreter = python_path()
+    log.info("Aternos helper: %s %s", interpreter, " ".join(args))
+    try:
+        process = await asyncio.create_subprocess_exec(
+            interpreter,
+            str(HELPER),
+            *args,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            env=_environment(),
+        )
+    except FileNotFoundError as exc:
+        raise MCError(f"Aternos helper interpreter not found: {interpreter}") from exc
 
     try:
-        server.start()
-    except Exception as exc:
-        raise MCError(str(exc)) from exc
+        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout)
+    except asyncio.TimeoutError as exc:
+        process.kill()
+        raise MCError("Aternos request timed out") from exc
 
-    try:  # 确认启动（部分账号需要）
-        server.confirm()
-    except Exception:
-        pass
+    out = stdout.decode("utf-8", "replace").strip()
+    err = stderr.decode("utf-8", "replace").strip()
+    if err:
+        log.debug("Aternos helper stderr: %s", err[-800:])
 
-    server.fetch()
-    return {
-        "address": f"{server.domain}:{server.port}",
-        "status": server.status,
-        "already": False,
-        "software": f"{server.software} {server.version}",
-    }
+    if not out:
+        raise MCError("Aternos helper returned nothing" + (f": {err[-200:]}" if err else ""))
+
+    line = out.splitlines()[-1]
+    try:
+        payload = json.loads(line)
+    except json.JSONDecodeError as exc:
+        raise MCError(f"Aternos helper returned junk: {line[:200]}") from exc
+
+    if not payload.get("ok"):
+        raise MCError(payload.get("error") or "Aternos returned an error")
+    return payload
 
 
 async def status() -> dict:
     if not configured():
-        raise MCError("Aternos is not configured yet - add your account to .env")
-    return await asyncio.to_thread(_status_sync)
+        raise MCError("Aternos is not configured: set ATERNOS_USERNAME / ATERNOS_PASSWORD in .env")
+    return await _run("status", timeout=90)
 
 
 async def start() -> dict:
     if not configured():
-        raise MCError("Aternos is not configured yet - add your account to .env")
-    return await asyncio.to_thread(_start_sync)
+        raise MCError("Aternos is not configured: set ATERNOS_USERNAME / ATERNOS_PASSWORD in .env")
+    return await _run("start", timeout=120)
 
 
 def _format_players(info: dict) -> str:
@@ -143,49 +125,27 @@ def _format_players(info: dict) -> str:
 
 
 async def watch_until_online(channel) -> None:
-    """Poll Aternos until the server is up (or we give up) and say so."""
-    deadline = time.time() + START_TIMEOUT
-    last_status = None
-    announce_every = 120
-    last_announce = 0.0
-
-    while time.time() < deadline:
-        try:
-            info = await status()
-        except Exception as exc:
-            log.warning("Status poll failed: %s", exc)
-            await asyncio.sleep(POLL_INTERVAL)
-            continue
-
-        state = info.get("status", "unknown")
-        if state != last_status:
-            log.info("Aternos status: %s", state)
-            last_status = state
-
-        if state == "online":
-            await channel.send(
-                f"✅ **The server is up!**\n"
-                f"Address: `{info['address']}`\n"
-                f"Players: {_format_players(info)} ♪\n"
-                f"Come join whenever you like~"
-            )
-            return
-
-        now = time.time()
-        if now - last_announce > announce_every and now - (deadline - START_TIMEOUT) > 60:
-            last_announce = now
-            if state in {"queue", "loading", "preparing", "starting"}:
-                await channel.send(f"⏳ Still queued/starting (status: {state}), I keep watching ♪")
-        await asyncio.sleep(POLL_INTERVAL)
+    """Wait for the server to come up (the helper polls Aternos) and report."""
+    try:
+        info = await _run("wait", str(START_TIMEOUT), timeout=START_TIMEOUT + 120)
+    except MCError as exc:
+        await channel.send(f"⌛ The server did not come up: {exc}")
+        return
+    except Exception as exc:  # noqa: BLE001
+        log.exception("Aternos wait failed")
+        await channel.send(f"⌛ Error while waiting for the server: {exc}")
+        return
 
     await channel.send(
-        "⌛ Still not up after 20 minutes - the queue may be long or the launch "
-        "failed. You can check the Aternos website ♪"
+        f"✅ **The server is up!**\n"
+        f"Address: `{info['address']}`\n"
+        f"Players: {_format_players(info)}\n"
+        f"Version: {info.get('software', '?')} · took {info.get('elapsed', '?')}s ♪\n"
+        f"Come join~"
     )
 
 
 def spawn_watcher(channel) -> bool:
-    """Start the polling task once. Returns False if one is already running."""
     global _watcher
     if _watcher is not None and not _watcher.done():
         return False

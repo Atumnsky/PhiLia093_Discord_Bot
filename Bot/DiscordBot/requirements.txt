@@ -7,5 +7,7 @@ Pillow>=10
 chromadb>=0.5
 python-dotenv>=1.0
 
-# Optional: Aternos Minecraft server control (#mc)
-python-aternos>=3.0
+# Optional: Aternos Minecraft server control (#mc).
+# python-aternos is NOT installed here: it pins js2py/lxml versions that do not
+# build on Python 3.12. It runs in a separate Python 3.11 venv instead, see the
+# "Minecraft" section of the README and ATERNOS_PYTHON in .env.example.
