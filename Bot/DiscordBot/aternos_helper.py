@@ -80,6 +80,7 @@ def build_client():
         client.login_with_session(session)
         try:
             list_servers(client)  # validates the cookie
+            save_session(client)
             return client
         except Exception as exc:  # noqa: BLE001
             log(f"stored session rejected: {exc}")
@@ -293,8 +294,9 @@ def serve() -> None:
                         message = str(exc)
                         if "401" in message or "403" in message or "Access denied" in message:
                             raise RuntimeError(
-                                "Aternos denied the start request: this account has "
-                                "no permission to start that server."
+                                "Aternos blocks automated start requests from this "
+                                "server. Press Start on aternos.org and I'll announce "
+                                "it here when it comes online."
                             ) from exc
                         raise
                     try:

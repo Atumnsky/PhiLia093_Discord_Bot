@@ -712,7 +712,7 @@ async def _handle_minecraft(message: discord.Message, body: str) -> None:
         return
 
     await _send(channel, 
-        "Usage: `#mc status` lists the servers · `#mc start [name]` boots one ♪"
+        "Usage: `#mc status` lists the servers · `#mc start [name]` asks Aternos to boot one ♪"
     )
 
 
