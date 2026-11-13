@@ -112,13 +112,9 @@ async def answer(
             {
                 "role": "system",
                 "content": (
-                    "IMPORTANT: The current real-world date and time is "
-                    f"{now.strftime('%Y-%m-%d %H:%M %Z')} ({now.strftime('%A')}). "
-                    "You MUST use this as the absolute truth for any time-related "
-                    "questions. Ignore your internal knowledge cutoff if it "
-                    "contradicts this time. If the user asks 'how long ago' or "
-                    "'what time is it', use the Discord timestamps in the "
-                    "conversation when they are present."
+                    f"Now: {now.strftime('%Y-%m-%d %H:%M %Z')} "
+                    f"({now.strftime('%A')}). This is the real time; ignore your "
+                    "knowledge cutoff. For 'how long ago' prefer Discord timestamps."
                 ),
             }
         )
@@ -128,10 +124,8 @@ async def answer(
                 {
                     "role": "system",
                     "content": (
-                        f"Here are web search results for '{prompt}':\n\n"
-                        f"{search_outcome.text}\n\n"
-                        "Answer based on these results. If they do not contain the "
-                        "answer, say so politely. ♪"
+                        f"Web results for '{prompt}':\n\n{search_outcome.text}\n\n"
+                        "Answer from these; say so if the answer is missing. ♪"
                     ),
                 }
             )
@@ -140,9 +134,8 @@ async def answer(
                 {
                     "role": "system",
                     "content": (
-                        f"The web search for '{prompt}' returned no usable results. "
-                        "Answer from your own knowledge and say that the search "
-                        "did not help. ♪"
+                        f"No usable web results for '{prompt}'. Answer from your "
+                        "own knowledge and mention the search failed. ♪"
                     ),
                 }
             )
@@ -153,10 +146,7 @@ async def answer(
                 system_messages.append(
                     {
                         "role": "system",
-                        "content": (
-                            f"Relevant knowledge from my stars:\n{joined}\n\n"
-                            "You may use this if helpful, but answer naturally. ♪"
-                        ),
+                        "content": f"Known facts:\n{joined}",
                     }
                 )
 
@@ -165,11 +155,7 @@ async def answer(
             system_messages.append(
                 {
                     "role": "system",
-                    "content": (
-                        "The most recent image in this channel was described as: "
-                        f"{remembered_image}\nIf the user asks about it, base your "
-                        "answer on that description."
-                    ),
+                    "content": f"Latest image here: {remembered_image}",
                 }
             )
 
@@ -694,7 +680,7 @@ async def _handle_minecraft(message: discord.Message, body: str) -> None:
             await _send(channel, f"⛏️ Could not reach Aternos: {exc}")
             return
         if not servers:
-            await _send(channel, "⛏️ 这个 Aternos 账号下看不到任何服务器")
+            await _send(channel, "⛏️ No servers are visible on this Aternos account.")
             return
         await _send(channel, 
             "⛏️ **Minecraft servers**\n" + "\n".join(mc.format_status(s) for s in servers)
@@ -720,13 +706,13 @@ async def _handle_minecraft(message: discord.Message, body: str) -> None:
             return
 
         await _send(channel, 
-            f"🕹️ 已经给 **{info['name']}** 发了启动请求（当前 `{info.get('state')}`）。\n"
-            f"它一上线我就来这里说一声 ♪"
+            f"🕹️ Start request sent to **{info['name']}** (state: `{info.get('state')}`).\n"
+            f"I'll post here the moment it's online ♪"
         )
         return
 
     await _send(channel, 
-        "用法：`#mc status` 看所有服务器 · `#mc start [名字]` 启动服务器 ♪"
+        "Usage: `#mc status` lists the servers · `#mc start [name]` boots one ♪"
     )
 
 

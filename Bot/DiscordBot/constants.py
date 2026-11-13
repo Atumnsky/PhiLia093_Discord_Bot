@@ -77,12 +77,8 @@ I'm here, ready when you are~
 """
 
 LANGUAGE_RULES = {
-    "english": (
-        "OUTPUT LANGUAGE: Always write your reply in English, even though these "
-        "instructions are written in Chinese. Only switch language if the user "
-        "writes to you in another language."
-    ),
-    "chinese": "OUTPUT LANGUAGE: 始终用中文回复。",
+    "english": "Reply in English unless the user writes in another language.",
+    "chinese": "始终用中文回复。",
 }
 
 

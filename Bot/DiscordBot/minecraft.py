@@ -200,7 +200,7 @@ def format_status(info: dict) -> str:
     icon = "🟢" if info.get("state") == "online" else "⚪"
     return (
         f"{icon} **{info['name']}** (`{info['address']}`)\n"
-        f"　状态 `{info['state']}` · 在线 {format_players(info)} · {info.get('software', '?')}"
+        f"　state `{info['state']}` · players {format_players(info)} · {info.get('software', '?')}"
     )
 
 
@@ -227,13 +227,13 @@ async def start_announcer(bot) -> None:
         previous = payload.get("previous")
         if state == "online" and previous != "online":
             await channel.send(
-                f"🟢 **{payload['name']} 开好了！**\n"
-                f"`{payload['address']}` · 在线 {format_players(payload)} ♪",
+                f"🟢 **{payload['name']} is up!**\n"
+                f"`{payload['address']}` · players {format_players(payload)} ♪",
                 allowed_mentions=discord.AllowedMentions.none(),
             )
         elif previous == "online" and state != "online":
             await channel.send(
-                f"💤 **{payload['name']}** 下线了 ♪",
+                f"💤 **{payload['name']}** went offline ♪",
                 allowed_mentions=discord.AllowedMentions.none(),
             )
 
