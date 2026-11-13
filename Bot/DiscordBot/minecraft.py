@@ -17,6 +17,8 @@ import os
 import sys
 from pathlib import Path
 
+import discord
+
 from config import settings
 
 log = logging.getLogger(__name__)
@@ -75,6 +77,7 @@ class AternosDaemon:
         self._lock = asyncio.Lock()
         self._reader: asyncio.Task | None = None
         self._stderr: asyncio.Task | None = None
+        self._stderr_tail: list[str] = []
         self.on_change = on_change
 
     async def ensure(self) -> None:
@@ -115,7 +118,8 @@ class AternosDaemon:
 
         for future in self._pending.values():
             if not future.done():
-                future.set_exception(MCError("Aternos daemon stopped"))
+                reason = "; ".join(self._stderr_tail[-3:]) or "helper exited"
+                future.set_exception(MCError(f"Aternos helper stopped: {reason}"))
         self._pending.clear()
 
     async def _read_stderr(self) -> None:
@@ -124,7 +128,10 @@ class AternosDaemon:
             line = await self._process.stderr.readline()
             if not line:
                 break
-            log.debug("aternos: %s", line.decode("utf-8", "replace").strip())
+            text = line.decode("utf-8", "replace").strip()
+            if text:
+                self._stderr_tail = (self._stderr_tail + [text])[-5:]
+            log.debug("aternos: %s", text)
 
     async def _emit_change(self, payload: dict) -> None:
         if self.on_change is None:
@@ -221,10 +228,14 @@ async def start_announcer(bot) -> None:
         if state == "online" and previous != "online":
             await channel.send(
                 f"🟢 **{payload['name']} 开好了！**\n"
-                f"`{payload['address']}` · 在线 {format_players(payload)} ♪"
+                f"`{payload['address']}` · 在线 {format_players(payload)} ♪",
+                allowed_mentions=discord.AllowedMentions.none(),
             )
         elif previous == "online" and state != "online":
-            await channel.send(f"💤 **{payload['name']}** 下线了 ♪")
+            await channel.send(
+                f"💤 **{payload['name']}** 下线了 ♪",
+                allowed_mentions=discord.AllowedMentions.none(),
+            )
 
     client = daemon()
     client.on_change = on_change

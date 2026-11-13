@@ -115,7 +115,7 @@ async def announce(bot: discord.Client, text: str) -> None:
     if channel is None:
         return
     try:
-        await channel.send(text)
+        await channel.send(text, allowed_mentions=discord.AllowedMentions.none())
         guild = getattr(channel, "guild", None)
         log.info(
             "Status message sent to %s#%s",

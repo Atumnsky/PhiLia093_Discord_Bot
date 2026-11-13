@@ -15,6 +15,8 @@ import re
 import time
 from datetime import datetime, timedelta
 
+import discord
+
 import ai
 import search
 from config import settings
@@ -103,7 +105,7 @@ async def compose(channel) -> str:
     text = STICKER_TAG.sub("", reply).strip()
     sticker = STICKER_TAG.search(reply)
 
-    await channel.send(text)
+    await channel.send(text, allowed_mentions=discord.AllowedMentions.none())
     if sticker:
         import stickers
 
@@ -112,7 +114,10 @@ async def compose(channel) -> str:
 
     if outcome.links:
         sources = "\n".join(f"[{i + 1}] {url}" for i, url in enumerate(outcome.links[:3]))
-        await channel.send(f"**Sources:**\n{sources}")
+        await channel.send(
+            f"**Sources:**\n{sources}",
+            allowed_mentions=discord.AllowedMentions.none(),
+        )
 
     return reply
 

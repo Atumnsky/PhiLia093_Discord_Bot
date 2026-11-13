@@ -40,40 +40,40 @@ TIME_KEYWORDS = (
     "how much is",
 )
 
-HELP_TEXT = """**PhiLia093 · command list** ♪
-我在这里，随时待命~
+HELP_TEXT = """**PhiLia093 · commands** ♪
+I'm here, ready when you are~
 
 **Chat**
-`#<message>` (或者直接在专属频道里说话)
-`#search <query>` — 先搜索再回答，附来源
-`#autosearch <on|off>` — 每条都先搜索
-`#thinking [on|off]` — 思考模式开关
-`#model [flash|pro]` — 选模型
-`#reset` — 清空当前对话记忆
+`#<message>` — talk to me (or just type in this channel)
+`#search <query>` — search the web, then answer with sources
+`#autosearch <on|off>` — search before every reply
+`#thinking [on|off]` — toggle reasoning mode
+`#model [flash|pro]` — pick the chat model
+`#reset` — forget this conversation
 
 **Knowledge**
-`#learn <text>` — 教我一条事实
-`#learn that` — 记住上一轮对话
-`#learn that search` — 记住上次搜索的网页原文
-`#learn from <url>` — 学一个网页
-`#knowledge` — 查看我知道的东西
-`#forget <n>` — 忘掉列表里第 n 条
-`#clean database` — 清空知识库
+`#learn <text>` — teach me a fact
+`#learn that` — remember our last exchange
+`#learn that search` — save the pages from my last search
+`#learn from <url>` — learn a web page
+`#knowledge` — list what I know
+`#forget <n>` — forget entry n of that list
+`#clean database` — wipe the knowledge base
 
 **Images**
-`#imagine <prompt>` — 生成图片（免费）
-`#imagine hq <prompt>` — 高质量生成（Qwen，若已配置）
-`#describe [问题]` — 描述附带的图片
-`#edit <指令>` — 编辑附带的图片（Qwen，若已配置）
+`#imagine <prompt>` — generate a picture (free)
+`#imagine hq <prompt>` — higher quality (Qwen, if configured)
+`#describe [question]` — describe an attached image
+`#edit <instruction>` — edit an attached image (Qwen, if configured)
 
 **News & Minecraft**
-`#news` — 现在就去搜今天最热的新闻并聊两句
-`#mc start` — 启动 Aternos 服务器
-`#mc status` — 看看服务器状态和在线玩家
+`#news` — fetch today's hottest story right now
+`#mc status` — show my Minecraft servers
+`#mc start [name]` — boot a server, I'll report when it's online
 
 **Fun**
-`#lets sing <song>` — 歌词接龙
-`#ping` — 测延迟
+`#lets sing <song>` — lyric game
+`#ping` — check my latency
 """
 
 LANGUAGE_RULES = {

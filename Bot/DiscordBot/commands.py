@@ -26,6 +26,15 @@ from constants import HELP_TEXT, SYSTEM_PROMPT, TIME_KEYWORDS, language_rule
 
 log = logging.getLogger(__name__)
 
+NO_PING = discord.AllowedMentions.none()
+
+
+async def _send(channel, *args, **kwargs):
+    """Send a message that can never ping anyone."""
+    kwargs.setdefault("allowed_mentions", NO_PING)
+    return await channel.send(*args, **kwargs)
+
+
 STICKER_PATTERN = re.compile(r"\[STICKER:\s*([a-zA-Z_]+)\s*\]", re.IGNORECASE)
 STICKER_CLEAN = re.compile(r"\[STICKER:[^\]]*\]", re.IGNORECASE)
 
@@ -58,12 +67,12 @@ async def send_text(channel, text: str) -> None:
         else:
             chunks.append(suffix.strip())
     for chunk in chunks:
-        await channel.send(chunk)
+        await _send(channel, chunk)
 
 
 async def send_pictures(channel, pictures: list[imagine.Picture]) -> None:
     for picture in pictures:
-        await channel.send(
+        await _send(channel, 
             file=discord.File(io.BytesIO(picture.data), filename=picture.filename)
         )
 
@@ -175,12 +184,12 @@ async def answer(
             reply = await ai.complete(messages, model=model, thinking=thinking)
         except ai.ChatError as exc:
             history.pop()
-            await channel.send(f"⚠️ My brain hiccupped: {exc}")
+            await _send(channel, f"⚠️ My brain hiccupped: {exc}")
             return ""
 
         if not reply:
             history.pop()
-            await channel.send("Hmm, I'm not sure what to say... ♪")
+            await _send(channel, "Hmm, I'm not sure what to say... ♪")
             return ""
 
         history.append({"role": "assistant", "content": reply})
@@ -219,7 +228,7 @@ async def chat(message: discord.Message, prompt: str) -> None:
     """Plain conversational turn, with automatic search when appropriate."""
     outcome = None
     if wants_search(message.author.id, prompt):
-        await message.channel.send(f"🔎 Searching for **{prompt}**...")
+        await _send(message.channel, f"🔎 Searching for **{prompt}**...")
         outcome = await search.web_search(prompt)
         last_search[message.author.id] = {
             "query": prompt,
@@ -253,10 +262,10 @@ async def game_tick(message: discord.Message) -> bool:
     index: int = state["current_index"]
     if index + 1 < len(lyrics):
         state["current_index"] = index + 1
-        await message.channel.send(f"{lyrics[index + 1]} ♪")
+        await _send(message.channel, f"{lyrics[index + 1]} ♪")
     else:
         games.pop(message.author.id, None)
-        await message.channel.send(
+        await _send(message.channel, 
             "We've reached the end of the song. It was lovely singing with you ♪"
         )
     return True
@@ -275,7 +284,7 @@ async def handle_command(message: discord.Message) -> bool:
 
     body = content[1:].strip()
     if not body:
-        await message.channel.send("Please say something, like `# What's new?` ♪")
+        await _send(message.channel, "Please say something, like `# What's new?` ♪")
         return True
 
     lowered = body.lower()
@@ -289,12 +298,12 @@ async def handle_command(message: discord.Message) -> bool:
 
     if lowered == "ping":
         latency = int((time.time() - message.created_at.timestamp()) * 1000)
-        await channel.send(f"🏓 Pong! `{latency} ms`")
+        await _send(channel, f"🏓 Pong! `{latency} ms`")
         return True
 
     if lowered in {"reset", "clear history"}:
         memory.history_for(channel.id, user_id).clear()
-        await channel.send("Conversation history cleared. A fresh start ♪")
+        await _send(channel, "Conversation history cleared. A fresh start ♪")
         return True
 
     # --- preferences ------------------------------------------------------
@@ -305,7 +314,7 @@ async def handle_command(message: discord.Message) -> bool:
         else:
             value = not bool(memory.prefs.get("thinking", user_id, True))
         memory.prefs.set("thinking", user_id, value)
-        await channel.send(
+        await _send(channel, 
             f"Thinking mode **{'on' if value else 'off'}** ♪"
             + ("" if option else " (use `#thinking on|off` to set it explicitly)")
         )
@@ -316,7 +325,7 @@ async def handle_command(message: discord.Message) -> bool:
         if option in {"on", "off"}:
             value = option == "on"
             memory.prefs.set("autosearch", user_id, value)
-            await channel.send(
+            await _send(channel, 
                 f"Auto-search is now **{option}** ♪"
                 + (
                     " I'll search before every answer."
@@ -326,7 +335,7 @@ async def handle_command(message: discord.Message) -> bool:
             )
         else:
             value = bool(memory.prefs.get("autosearch", user_id, False))
-            await channel.send(
+            await _send(channel, 
                 f"Auto-search is currently **{'on' if value else 'off'}**. "
                 "Use `#autosearch on|off` ♪"
             )
@@ -336,13 +345,13 @@ async def handle_command(message: discord.Message) -> bool:
         option = body[len("model") :].strip().lower()
         if option in {"flash", "deepseek-flash", "fast"}:
             memory.prefs.set("model", user_id, "flash")
-            await channel.send(f"Using **{settings.deepseek_model}** ♪")
+            await _send(channel, f"Using **{settings.deepseek_model}** ♪")
         elif option in {"pro", "deepseek-v4-pro", "smart"}:
             memory.prefs.set("model", user_id, "pro")
-            await channel.send(f"Using **{settings.deepseek_pro_model}** ♪")
+            await _send(channel, f"Using **{settings.deepseek_pro_model}** ♪")
         else:
             current = current_model(user_id)
-            await channel.send(
+            await _send(channel, 
                 f"Current model: **{current}**. Use `#model flash` or `#model pro` ♪"
             )
         return True
@@ -351,9 +360,9 @@ async def handle_command(message: discord.Message) -> bool:
     if lowered.startswith("search ") or lowered == "search":
         query = body[len("search") :].strip()
         if not query:
-            await channel.send("What should I search for? `#search Nvidia stock price` ♪")
+            await _send(channel, "What should I search for? `#search Nvidia stock price` ♪")
             return True
-        await channel.send(f"🔎 Searching for **{query}**...")
+        await _send(channel, f"🔎 Searching for **{query}**...")
         outcome = await search.web_search(query)
         last_search[user_id] = {
             "query": query,
@@ -381,11 +390,11 @@ async def handle_command(message: discord.Message) -> bool:
     if lowered.startswith("clean"):
         total = await memory.clear()
         if total:
-            await channel.send(
+            await _send(channel, 
                 f"✨ I cleansed **{total}** entries from my stars. A fresh page awaits ♪"
             )
         else:
-            await channel.send("My stars are already empty, nothing to clean ♪")
+            await _send(channel, "My stars are already empty, nothing to clean ♪")
         return True
 
     # --- daily news -------------------------------------------------------
@@ -437,7 +446,7 @@ async def _handle_learn(message: discord.Message, body: str, user_id: int) -> No
         if from_search:
             record = last_search.get(user_id)
             if not record:
-                await channel.send(
+                await _send(channel, 
                     "I have no recent search to learn from. Search something first ♪"
                 )
                 return
@@ -448,14 +457,14 @@ async def _handle_learn(message: discord.Message, body: str, user_id: int) -> No
                 stored = await memory.add(
                     f"Q: {query}\nA: {reply}", source=f"user:{message.author.name}"
                 )
-                await channel.send(
+                await _send(channel, 
                     "I've learned the summary from the stars ♪"
                     if stored
                     else "I could not store that, sorry ♪"
                 )
                 return
 
-            await channel.send(
+            await _send(channel, 
                 f"📚 Reading {min(3, len(links))} of {len(links)} source(s)..."
             )
             texts: list[str] = []
@@ -469,7 +478,7 @@ async def _handle_learn(message: discord.Message, body: str, user_id: int) -> No
                 stored = await memory.add(
                     f"Q: {query}\nA: {reply}", source=f"user:{message.author.name}"
                 )
-                await channel.send(
+                await _send(channel, 
                     "The pages were unreachable, so I kept the summary instead ♪"
                     if stored
                     else "I could not store that, sorry ♪"
@@ -479,7 +488,7 @@ async def _handle_learn(message: discord.Message, body: str, user_id: int) -> No
             stored = await memory.add(
                 combined, source=f"user:{message.author.name} (web)"
             )
-            await channel.send(
+            await _send(channel, 
                 f"✨ Learned from {len(used)} source(s) ♪"
                 if stored
                 else "I could not store that, sorry ♪"
@@ -488,7 +497,7 @@ async def _handle_learn(message: discord.Message, body: str, user_id: int) -> No
 
         conversation = last_conversation.get(user_id)
         if not conversation:
-            await channel.send(
+            await _send(channel, 
                 "I have no recent conversation to learn from. Chat with me first ♪"
             )
             return
@@ -496,7 +505,7 @@ async def _handle_learn(message: discord.Message, body: str, user_id: int) -> No
             f"Q: {conversation['user']}\nA: {conversation['bot']}",
             source=f"user:{message.author.name}",
         )
-        await channel.send(
+        await _send(channel, 
             "Saved our last exchange to my memory ♪"
             if stored
             else "I could not store that, sorry ♪"
@@ -506,19 +515,19 @@ async def _handle_learn(message: discord.Message, body: str, user_id: int) -> No
     if lowered.startswith("learn from "):
         url = body[len("learn from ") :].strip()
         if not url.startswith(("http://", "https://")):
-            await channel.send("Give me a full URL, e.g. `#learn from https://example.com` ♪")
+            await _send(channel, "Give me a full URL, e.g. `#learn from https://example.com` ♪")
             return
-        await channel.send(f"📚 Reading {url} ...")
+        await _send(channel, f"📚 Reading {url} ...")
         page = await search.fetch_page(url, max_chars=8000)
         if not page:
-            await channel.send("I could not read that page (blocked or not text) ♪")
+            await _send(channel, "I could not read that page (blocked or not text) ♪")
             return
         stored = await memory.add(
             f"Source: {url}\n\n{page}",
             source=f"user:{message.author.name} (url)",
             url=url,
         )
-        await channel.send(
+        await _send(channel, 
             "✨ Learned it and stored it in my memory ♪"
             if stored
             else "I could not store that, sorry ♪"
@@ -527,10 +536,10 @@ async def _handle_learn(message: discord.Message, body: str, user_id: int) -> No
 
     text = body[len("learn") :].strip()
     if not text:
-        await channel.send("Tell me what to learn: `#learn Honkai Star Rail 4.2 out in April` ♪")
+        await _send(channel, "Tell me what to learn: `#learn Honkai Star Rail 4.2 out in April` ♪")
         return
     stored = await memory.add(text, source=f"user:{message.author.name}")
-    await channel.send(
+    await _send(channel, 
         "Added to my stars, thank you for sharing ♪"
         if stored
         else "I could not store that, sorry ♪"
@@ -541,7 +550,7 @@ async def _handle_knowledge(message: discord.Message, user_id: int) -> None:
     channel = message.channel
     total = await memory.count()
     if total == 0:
-        await channel.send("My stars hold no knowledge yet. Teach me with `#learn` ♪")
+        await _send(channel, "My stars hold no knowledge yet. Teach me with `#learn` ♪")
         return
     entries = await memory.listing(limit=50)
     last_listing[user_id] = entries
@@ -550,7 +559,7 @@ async def _handle_knowledge(message: discord.Message, user_id: int) -> None:
         preview = document[:60].replace("\n", " ")
         lines.append(f"`{index}.` {preview}")
     lines.append("Use `#forget <number>` to remove one.")
-    await channel.send("\n".join(lines)[:1990])
+    await _send(channel, "\n".join(lines)[:1990])
 
 
 async def _handle_forget(message: discord.Message, body: str, user_id: int) -> None:
@@ -558,20 +567,20 @@ async def _handle_forget(message: discord.Message, body: str, user_id: int) -> N
     argument = body[len("forget") :].strip()
     entries = last_listing.get(user_id)
     if not entries:
-        await channel.send("Run `#knowledge` first so I know which number you mean ♪")
+        await _send(channel, "Run `#knowledge` first so I know which number you mean ♪")
         return
     try:
         index = int(argument) - 1
     except ValueError:
-        await channel.send("Use `#forget 2` with a number ♪")
+        await _send(channel, "Use `#forget 2` with a number ♪")
         return
     if not 0 <= index < len(entries):
-        await channel.send(f"Pick a number between 1 and {len(entries)} ♪")
+        await _send(channel, f"Pick a number between 1 and {len(entries)} ♪")
         return
     entry_id, document = entries.pop(index)
     await memory.delete([entry_id])
     preview = document[:60].replace("\n", " ")
-    await channel.send(f"Forgotten: `{preview}` ... the stars are emptier now ♪")
+    await _send(channel, f"Forgotten: `{preview}` ... the stars are emptier now ♪")
 
 
 async def _handle_imagine(message: discord.Message, body: str, user_id: int) -> None:
@@ -582,17 +591,17 @@ async def _handle_imagine(message: discord.Message, body: str, user_id: int) -> 
         hq = True
         prompt = prompt[3:].strip()
     if not prompt:
-        await channel.send("What should I draw? `#imagine a cat on a cloud` ♪")
+        await _send(channel, "What should I draw? `#imagine a cat on a cloud` ♪")
         return
 
     async with channel.typing():
-        await channel.send(
+        await _send(channel, 
             "🎨 Painting..." if not hq else "🎨 Painting with the premium brush..."
         )
         try:
             pictures = await imagine.generate(prompt, hq=hq)
         except imagine.ImageError as exc:
-            await channel.send(f"🖌️ I could not create that image: {exc}")
+            await _send(channel, f"🖌️ I could not create that image: {exc}")
             return
     await send_pictures(channel, pictures)
 
@@ -601,17 +610,17 @@ async def _handle_edit(message: discord.Message, body: str) -> None:
     channel = message.channel
     instruction = body[len("edit") :].strip()
     if not instruction:
-        await channel.send("Tell me how to edit it: `#edit make it watercolor` ♪")
+        await _send(channel, "Tell me how to edit it: `#edit make it watercolor` ♪")
         return
     image_bytes = await _first_image(message)
     if image_bytes is None:
         return
     async with channel.typing():
-        await channel.send("🖌️ Editing your image...")
+        await _send(channel, "🖌️ Editing your image...")
         try:
             pictures = await imagine.edit(image_bytes, instruction)
         except imagine.ImageError as exc:
-            await channel.send(f"🖌️ Editing failed: {exc}")
+            await _send(channel, f"🖌️ Editing failed: {exc}")
             return
     await send_pictures(channel, pictures)
 
@@ -630,7 +639,7 @@ async def _handle_describe(
         try:
             description = await vision.describe(image_bytes, prompt)
         except vision.VisionError as exc:
-            await channel.send(f"👁️ I could not read the image: {exc}")
+            await _send(channel, f"👁️ I could not read the image: {exc}")
             return
 
     image_context[channel.id] = description
@@ -652,11 +661,11 @@ async def _handle_news(message: discord.Message) -> None:
     import news
 
     channel = message.channel
-    await channel.send("📰 Let me check today's news...")
+    await _send(channel, "📰 Let me check today's news...")
     async with channel.typing():
         text = await news.compose(channel)
     if not text:
-        await channel.send("Nothing worth reporting came back - try again later ♪")
+        await _send(channel, "Nothing worth reporting came back - try again later ♪")
 
 
 async def _handle_minecraft(message: discord.Message, body: str) -> None:
@@ -678,16 +687,16 @@ async def _handle_minecraft(message: discord.Message, body: str) -> None:
         try:
             servers = await mc.list_status()
         except mc.MCError as exc:
-            await channel.send(f"⛏️ {exc}")
+            await _send(channel, f"⛏️ {exc}")
             return
         except Exception as exc:
             log.warning("Aternos status failed: %s", exc)
-            await channel.send(f"⛏️ Could not reach Aternos: {exc}")
+            await _send(channel, f"⛏️ Could not reach Aternos: {exc}")
             return
         if not servers:
-            await channel.send("⛏️ 这个 Aternos 账号下看不到任何服务器")
+            await _send(channel, "⛏️ 这个 Aternos 账号下看不到任何服务器")
             return
-        await channel.send(
+        await _send(channel, 
             "⛏️ **Minecraft servers**\n" + "\n".join(mc.format_status(s) for s in servers)
         )
         return
@@ -696,27 +705,27 @@ async def _handle_minecraft(message: discord.Message, body: str) -> None:
         try:
             info = await mc.start(target)
         except mc.MCError as exc:
-            await channel.send(f"⛏️ {exc}")
+            await _send(channel, f"⛏️ {exc}")
             return
         except Exception as exc:
             log.warning("Aternos start failed: %s", exc)
-            await channel.send(f"⛏️ Could not start the server: {exc}")
+            await _send(channel, f"⛏️ Could not start the server: {exc}")
             return
 
         if info.get("already"):
-            await channel.send(
+            await _send(channel, 
                 f"🟢 **{info['name']}** is already online: `{info['address']}` "
                 f"({mc.format_players(info)}) ♪"
             )
             return
 
-        await channel.send(
+        await _send(channel, 
             f"🕹️ 已经给 **{info['name']}** 发了启动请求（当前 `{info.get('state')}`）。\n"
             f"它一上线我就来这里说一声 ♪"
         )
         return
 
-    await channel.send(
+    await _send(channel, 
         "用法：`#mc status` 看所有服务器 · `#mc start [名字]` 启动服务器 ♪"
     )
 
@@ -725,17 +734,17 @@ async def _handle_song(message: discord.Message, body: str) -> None:
     channel = message.channel
     name = re.sub(r"^let'?s sing\b", "", body, flags=re.IGNORECASE).strip()
     if not name:
-        await channel.send("Which song shall we sing? ♪")
+        await _send(channel, "Which song shall we sing? ♪")
         return
     entries = await memory.search(name, k=1)
     if not entries:
-        await channel.send(
+        await _send(channel, 
             "I don't know that song yet. Teach it with `#learn` first, or search it ♪"
         )
         return
     lyrics = [line.strip() for line in entries[0].splitlines() if line.strip()]
     if len(lyrics) < 2:
-        await channel.send("That looks too short to sing. Maybe it is just a title? ♪")
+        await _send(channel, "That looks too short to sing. Maybe it is just a title? ♪")
         return
     games[message.author.id] = {
         "song": name,
@@ -743,7 +752,7 @@ async def _handle_song(message: discord.Message, body: str) -> None:
         "current_index": 0,
         "channel": channel.id,
     }
-    await channel.send(
+    await _send(channel, 
         f"Let's sing **{name}**! I'll follow your lead. Start: {lyrics[0]} ♪"
     )
 
@@ -751,7 +760,7 @@ async def _handle_song(message: discord.Message, body: str) -> None:
 async def _first_image(message: discord.Message) -> bytes | None:
     """Download the first image attachment, telling the user when it is missing."""
     if not message.attachments:
-        await message.channel.send("Please attach an image to that command ♪")
+        await _send(message.channel, "Please attach an image to that command ♪")
         return None
     attachment = message.attachments[0]
     looks_like_image = (
@@ -761,11 +770,11 @@ async def _first_image(message: discord.Message) -> bytes | None:
         )
     )
     if not looks_like_image:
-        await message.channel.send("That does not look like an image file ♪")
+        await _send(message.channel, "That does not look like an image file ♪")
         return None
     try:
         return await vision.download(attachment.url)
     except Exception as exc:
         log.warning("Attachment download failed: %s", exc)
-        await message.channel.send("I could not download the attachment ♪")
+        await _send(message.channel, "I could not download the attachment ♪")
         return None
