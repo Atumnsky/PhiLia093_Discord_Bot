@@ -127,7 +127,11 @@ Bot/DiscordBot/
 - **`PrivilegedIntentsRequired`** — enable "Message Content Intent" in the
   Developer Portal → Bot.
 - **Bot ignores plain messages** — `PHILIA093_CHAT_CHANNEL` points at a deleted
-  channel. Set it to an existing channel ID (comma separated for several).
+  channel. Set it to an existing channel ID (comma separated for several), or
+  leave it empty and create a channel named `cyrene-chat`: the bot finds it by
+  name automatically.
+- **No more "Online/Offline" chatter** — `STATUS_MESSAGES=false` (default).
+  Set it to `true` if you want the notices back.
 - **No images** — Pollinations is rate limited on heavy use; `IMAGE_PROVIDER=aliyun`
   switches the default backend to the paid one.
 - **Logs** — `data/bot.log` (rotating), or `pm2 logs discord-bot`.

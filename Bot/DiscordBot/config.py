@@ -63,6 +63,7 @@ class Settings:
     online_channel: int
     max_history: int
     timestamp_suffix: bool
+    status_messages: bool
 
     # --- Chat model (DeepSeek) ---
     deepseek_key: str
@@ -127,6 +128,7 @@ def load_settings() -> Settings:
         online_channel=online_channel,
         max_history=max(2, _int("MAX_HISTORY", 30)),
         timestamp_suffix=_bool("TIMESTAMP_SUFFIX", True),
+        status_messages=_bool("STATUS_MESSAGES", False),
         deepseek_key=_raw("DEEPSEEK_API_KEY"),
         deepseek_model=_str("DEEPSEEK_MODEL", "deepseek-flash"),
         deepseek_pro_model=_str("DEEPSEEK_PRO_MODEL", "deepseek-v4-pro"),

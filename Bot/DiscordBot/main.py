@@ -21,7 +21,6 @@ from config import settings
 
 log = logging.getLogger("philia")
 
-_offline_sent = False
 _chat_channels: list[int] = []
 
 
@@ -82,6 +81,7 @@ def setup_logging() -> None:
     )
     logging.getLogger("discord").setLevel(logging.WARNING)
     logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpx2").setLevel(logging.WARNING)
     logging.getLogger("chromadb").setLevel(logging.WARNING)
 
 
@@ -103,17 +103,23 @@ def pick_online_channel(bot: discord.Client) -> discord.abc.Messageable | None:
     return None
 
 
-async def notify_offline(bot: discord.Client) -> None:
-    global _offline_sent
-    if _offline_sent:
+async def announce(bot: discord.Client, text: str) -> None:
+    """Optional status notice; disabled unless STATUS_MESSAGES=true."""
+    if not settings.status_messages:
         return
-    _offline_sent = True
     channel = pick_online_channel(bot)
-    if channel is not None:
-        try:
-            await channel.send("PhiLia093 is Offline! 👋")
-        except Exception as exc:
-            log.warning("Could not send offline message: %s", exc)
+    if channel is None:
+        return
+    try:
+        await channel.send(text)
+        guild = getattr(channel, "guild", None)
+        log.info(
+            "Status message sent to %s#%s",
+            getattr(guild, "name", "DM"),
+            getattr(channel, "name", "?"),
+        )
+    except Exception as exc:
+        log.warning("Could not send status message: %s", exc)
 
 
 async def run() -> None:
@@ -147,19 +153,10 @@ async def run() -> None:
             )
         )
         channel = pick_online_channel(bot)
-        if channel is not None:
-            try:
-                await channel.send("PhiLia093 is Online! ✨")
-                guild = getattr(channel, "guild", None)
-                log.info(
-                    "Online message sent to %s#%s",
-                    getattr(guild, "name", "DM"),
-                    getattr(channel, "name", "?"),
-                )
-            except Exception as exc:
-                log.warning("Could not send online message: %s", exc)
-        else:
-            log.warning("No writable channel found for the online message")
+        if settings.status_messages:
+            await announce(bot, "PhiLia093 is Online! ✨")
+        elif channel is None:
+            log.warning("No writable channel found")
 
     @bot.event
     async def on_message(message: discord.Message) -> None:
@@ -192,7 +189,7 @@ async def run() -> None:
             return
         stopping.set()
         log.info("Shutting down...")
-        await notify_offline(bot)
+        await announce(bot, "PhiLia093 is Offline! 👋")
         await bot.close()
 
     loop = asyncio.get_running_loop()
@@ -212,7 +209,7 @@ async def run() -> None:
     except KeyboardInterrupt:
         await shutdown()
     finally:
-        await notify_offline(bot)
+        await announce(bot, "PhiLia093 is Offline! 👋")
         if not bot.is_closed():
             await bot.close()
 
