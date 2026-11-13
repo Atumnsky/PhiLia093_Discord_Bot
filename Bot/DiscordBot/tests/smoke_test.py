@@ -21,6 +21,7 @@ sys.path.insert(0, str(BASE))
 os.chdir(BASE)
 
 import commands  # noqa: E402  (needs the path setup above)
+import memory  # noqa: E402
 import vision  # noqa: E402
 
 _original_download = vision.download
@@ -146,6 +147,15 @@ async def main() -> int:
         failures.append(f"describe: {exc}")
     show("describe", channel)
     channel.sent.clear()
+
+    # undo what the test wrote (knowledge entry + preferences)
+    entries = await memory.listing(limit=200)
+    doomed = [entry_id for entry_id, doc in entries if "jasmine green tea" in doc]
+    if doomed:
+        await memory.delete(doomed)
+    memory.prefs.set("thinking", 42, True)
+    memory.prefs.set("model", 42, "flash")
+    print(f"\ncleaned {len(doomed)} test knowledge entry(ies)")
 
     print("\n--- summary ---")
     if failures:

@@ -47,6 +47,8 @@ def _stamp() -> str:
 
 async def send_text(channel, text: str) -> None:
     """Send text, splitting long messages and appending the clock suffix."""
+    if not text or not text.strip():
+        return
     chunks = ai.split(text)
     if settings.timestamp_suffix:
         suffix = f"\n\n🕒  {_stamp()}"
@@ -231,6 +233,8 @@ async def game_tick(message: discord.Message) -> bool:
     """Advance a running lyric game. Returns True if it consumed the message."""
     state = games.get(message.author.id)
     if state is None:
+        return False
+    if state.get("channel") != message.channel.id:
         return False
 
     content = message.content.strip()
@@ -647,6 +651,7 @@ async def _handle_song(message: discord.Message, body: str) -> None:
         "song": name,
         "lyrics": lyrics,
         "current_index": 0,
+        "channel": channel.id,
     }
     await channel.send(
         f"Let's sing **{name}**! I'll follow your lead. Start: {lyrics[0]} ♪"
