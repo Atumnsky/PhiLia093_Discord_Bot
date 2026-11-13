@@ -6,3 +6,6 @@ beautifulsoup4>=4.12
 Pillow>=10
 chromadb>=0.5
 python-dotenv>=1.0
+
+# Optional: Aternos Minecraft server control (#mc)
+python-aternos>=3.1

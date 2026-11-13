@@ -82,7 +82,7 @@ async def _pollinations_generate(prompt: str) -> list[Picture]:
     )
     async with aiohttp.ClientSession() as session:
         data = await _download(session, url)
-    return [Picture(data=data, source="pollinations", filename=f"cyrene_{seed}.jpg")]
+    return [Picture(data=data, source="pollinations", filename=f"philia_{seed}.jpg")]
 
 
 async def _aliyun_generate(prompt: str, count: int) -> list[Picture]:
@@ -115,7 +115,7 @@ async def _aliyun_generate(prompt: str, count: int) -> list[Picture]:
                 log.warning("Could not download generated image: %s", exc)
                 continue
             pictures.append(
-                Picture(data=data, source="aliyun", filename=f"cyrene_hq_{index}.png")
+                Picture(data=data, source="aliyun", filename=f"philia_hq_{index}.png")
             )
     if not pictures:
         raise ImageError("Could not download generated image")
@@ -165,7 +165,7 @@ async def edit(image_bytes: bytes, instruction: str) -> list[Picture]:
         for index, url in enumerate(urls):
             data = await _download(session, url)
             pictures.append(
-                Picture(data=data, source="aliyun-edit", filename=f"cyrene_edit_{index}.png")
+                Picture(data=data, source="aliyun-edit", filename=f"philia_edit_{index}.png")
             )
     return pictures
 

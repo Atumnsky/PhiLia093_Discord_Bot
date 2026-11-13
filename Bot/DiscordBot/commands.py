@@ -11,6 +11,7 @@ import io
 import logging
 import re
 import time
+from datetime import datetime
 
 import discord
 
@@ -21,7 +22,7 @@ import search
 import stickers
 import vision
 from config import settings
-from constants import CYRENE_SYSTEM_PROMPT, HELP_TEXT, TIME_KEYWORDS
+from constants import HELP_TEXT, SYSTEM_PROMPT, TIME_KEYWORDS, language_rule
 
 log = logging.getLogger(__name__)
 
@@ -42,7 +43,7 @@ image_context: dict[int, str] = {}
 
 
 def _stamp() -> str:
-    return time.strftime("%H:%M-%d/%m/%Y")
+    return datetime.now(settings.tz).strftime("%H:%M-%d/%m/%Y")
 
 
 async def send_text(channel, text: str) -> None:
@@ -93,16 +94,22 @@ async def answer(
     thinking = bool(memory.prefs.get("thinking", user_id, True))
 
     async with channel.typing():
-        system_messages = [{"role": "system", "content": CYRENE_SYSTEM_PROMPT}]
+        now = datetime.now(settings.tz)
+        system_messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+        system_messages.append(
+            {"role": "system", "content": language_rule(settings.reply_language)}
+        )
         system_messages.append(
             {
                 "role": "system",
                 "content": (
                     "IMPORTANT: The current real-world date and time is "
-                    f"{time.strftime('%Y-%m-%d %H:%M:%S %Z')}. "
+                    f"{now.strftime('%Y-%m-%d %H:%M %Z')} ({now.strftime('%A')}). "
                     "You MUST use this as the absolute truth for any time-related "
                     "questions. Ignore your internal knowledge cutoff if it "
-                    "contradicts this time."
+                    "contradicts this time. If the user asks 'how long ago' or "
+                    "'what time is it', use the Discord timestamps in the "
+                    "conversation when they are present."
                 ),
             }
         )
@@ -381,6 +388,16 @@ async def handle_command(message: discord.Message) -> bool:
             await channel.send("My stars are already empty, nothing to clean ♪")
         return True
 
+    # --- daily news -------------------------------------------------------
+    if lowered == "news" or lowered.startswith("news "):
+        await _handle_news(message)
+        return True
+
+    # --- minecraft --------------------------------------------------------
+    if lowered == "mc" or lowered.startswith(("mc ", "minecraft")):
+        await _handle_minecraft(message, body)
+        return True
+
     # --- images -----------------------------------------------------------
     if lowered.startswith("imagine"):
         await _handle_imagine(message, body, user_id)
@@ -629,6 +646,76 @@ async def _handle_describe(
         )
     else:
         await send_text(channel, description)
+
+
+async def _handle_news(message: discord.Message) -> None:
+    import news
+
+    channel = message.channel
+    await channel.send("📰 Let me check today's news...")
+    async with channel.typing():
+        text = await news.compose(channel)
+    if not text:
+        await channel.send("Nothing worth reporting came back - try again later ♪")
+
+
+async def _handle_minecraft(message: discord.Message, body: str) -> None:
+    import minecraft as mc
+
+    channel = message.channel
+    argument = body
+    for prefix in ("minecraft", "mc"):
+        if argument.lower().startswith(prefix):
+            argument = argument[len(prefix) :]
+            break
+    argument = argument.strip().lower()
+
+    if argument in {"", "status", "s"}:
+        try:
+            info = await mc.status()
+        except mc.MCError as exc:
+            await channel.send(f"⛏️ {exc}")
+            return
+        except Exception as exc:
+            log.warning("Aternos status failed: %s", exc)
+            await channel.send(f"⛏️ Could not reach Aternos: {exc}")
+            return
+        await channel.send(
+            f"⛏️ **{info['address']}**\n"
+            f"状态：`{info['status']}` · 在线：{mc._format_players(info)}\n"
+            f"版本：{info['software']}"
+        )
+        return
+
+    if argument in {"start", "on", "up"}:
+        try:
+            info = await mc.start()
+        except mc.MCError as exc:
+            await channel.send(f"⛏️ {exc}")
+            return
+        except Exception as exc:
+            log.warning("Aternos start failed: %s", exc)
+            await channel.send(f"⛏️ Could not start the server: {exc}")
+            return
+
+        if info.get("already"):
+            await channel.send(
+                f"⛏️ It is already running: `{info['address']}` "
+                f"({info.get('players', 0)}/{info.get('slots', '?')} 人) ♪"
+            )
+            return
+
+        await channel.send(
+            f"🕹️ Start request sent to Aternos (status: `{info.get('status')}`）。\n"
+            f"I will watch it and ping you the moment it is up ♪"
+        )
+        if not mc.spawn_watcher(channel):
+            await channel.send("(already watching, no need to click twice)")
+        return
+
+    await channel.send(
+        "Usage: `#mc start` to boot the server, `#mc status` to check it ♪"
+    )
 
 
 async def _handle_song(message: discord.Message, body: str) -> None:

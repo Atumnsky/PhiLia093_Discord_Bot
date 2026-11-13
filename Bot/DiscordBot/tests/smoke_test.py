@@ -135,6 +135,8 @@ async def main() -> int:
     await run("learn", "#learn Cyrene's favourite tea is jasmine green tea")
     await run("knowledge", "#knowledge")
     await run("imagine", "#imagine a small robot drinking tea", expect_file=True)
+    await run("news", "#news")
+    await run("minecraft", "#mc status")
     await run("song", "#lets sing jasmine")
 
     # describe with a real sticker as attachment

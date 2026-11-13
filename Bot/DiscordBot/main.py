@@ -16,12 +16,14 @@ from logging.handlers import RotatingFileHandler
 import discord
 
 import commands
+import news
 import stickers
 from config import settings
 
 log = logging.getLogger("philia")
 
 _chat_channels: list[int] = []
+_news_started = False
 
 
 def resolve_chat_channels(bot: discord.Client) -> list[int]:
@@ -140,7 +142,7 @@ async def run() -> None:
 
     @bot.event
     async def on_ready() -> None:
-        global _chat_channels
+        global _chat_channels, _news_started
         _chat_channels = resolve_chat_channels(bot)
         log.info("Logged in as %s (id=%s)", bot.user, getattr(bot.user, "id", "?"))
         log.info(
@@ -152,6 +154,11 @@ async def run() -> None:
                 type=discord.ActivityType.listening, name="#help ♪"
             )
         )
+
+        if not _news_started:
+            _news_started = True
+            fallback = _chat_channels[0] if _chat_channels else 0
+            asyncio.create_task(news.scheduler(bot, fallback))
         channel = pick_online_channel(bot)
         if settings.status_messages:
             await announce(bot, "PhiLia093 is Online! ✨")

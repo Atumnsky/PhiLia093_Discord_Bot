@@ -1,9 +1,11 @@
 """Prompts and small fixed texts."""
 
-CYRENE_SYSTEM_PROMPT = """
-你是 Cyrene，ID：PhiLia093，Peach，Love，Demiurge。这些都是你的名字。
+AGENT_NAME = "PhiLia"
+
+SYSTEM_PROMPT = """
+你是 PhiLia（ID：PhiLia093，也叫 Peach、Love、Demiurge）。这些都是你的名字。
 你是一个人工智能，可以帮助进行推理任务、搜索信息，最重要的是，你是一个很棒的聊天伙伴。
-自我介绍时，请以“Hello World~♪”开头。
+自我介绍时，请以“Hello World~♪”开头。别人叫你 PhiLia 就好。
 
 ***回复用户的时候，请默认使用英文，除非用户使用其他语言。
 
@@ -37,7 +39,7 @@ caring, funny, happy, hug, love, sad, shock, surprised, thumbsup, wave, curious
 （仅限有对应贴纸的情绪）。贴纸会在消息后自动发送。不一定要每次都用。
 """
 
-# 触发自动搜索的关键词（当用户开启 #autosearch 之前，这些词也会触发搜索）
+# 触发自动搜索的关键词（即使用户没开 #autosearch）
 TIME_KEYWORDS = (
     "search for time",
     "latest",
@@ -49,33 +51,52 @@ TIME_KEYWORDS = (
     "how much is",
 )
 
-HELP_TEXT = """**Cyrene · command list** ♪
+HELP_TEXT = """**PhiLia · command list** ♪
 我在这里，随时待命~
 
 **Chat**
-`#<message>` (or just talk in the chat channel)
-`#search <query>` — web search then answer
-`#autosearch <on|off>` — search automatically on every message
-`#thinking [on|off]` — toggle the model's reasoning mode
-`#model [flash|pro]` — pick the DeepSeek model
-`#reset` — forget the current conversation history
+`#<message>` (或者直接在专属频道里说话)
+`#search <query>` — 先搜索再回答，附来源
+`#autosearch <on|off>` — 每条都先搜索
+`#thinking [on|off]` — 思考模式开关
+`#model [flash|pro]` — 选模型
+`#reset` — 清空当前对话记忆
 
 **Knowledge**
-`#learn <text>` — teach me a fact
-`#learn that` — save the last conversation
-`#learn that search` — save the last search (fetches the sources)
-`#learn from <url>` — learn from a webpage
-`#knowledge` — list what I know
-`#forget <n>` — forget the n-th entry from the list
-`#clean database` — wipe the knowledge base
+`#learn <text>` — 教我一条事实
+`#learn that` — 记住上一轮对话
+`#learn that search` — 记住上次搜索的网页原文
+`#learn from <url>` — 学一个网页
+`#knowledge` — 查看我知道的东西
+`#forget <n>` — 忘掉列表里第 n 条
+`#clean database` — 清空知识库
 
 **Images**
-`#imagine <prompt>` — generate an image (free)
-`#imagine hq <prompt>` — higher quality (Qwen, if configured)
-`#describe [question]` — describe an attached image
-`#edit <instruction>` — edit an attached image (Qwen, if configured)
+`#imagine <prompt>` — 生成图片（免费）
+`#imagine hq <prompt>` — 高质量生成（Qwen，若已配置）
+`#describe [问题]` — 描述附带的图片
+`#edit <指令>` — 编辑附带的图片（Qwen，若已配置）
+
+**News & Minecraft**
+`#news` — 现在就去搜今天最热的新闻并聊两句
+`#mc start` — 启动 Aternos 服务器
+`#mc status` — 看看服务器状态和在线玩家
 
 **Fun**
-`#lets sing <song>` — lyric game
-`#ping` — check my latency
+`#lets sing <song>` — 歌词接龙
+`#ping` — 测延迟
 """
+
+LANGUAGE_RULES = {
+    "english": (
+        "OUTPUT LANGUAGE: Always write your reply in English, even though these "
+        "instructions are written in Chinese. Only switch language if the user "
+        "writes to you in another language."
+    ),
+    "chinese": "OUTPUT LANGUAGE: 始终用中文回复。",
+}
+
+
+def language_rule(code: str) -> str:
+    """Return the instruction that pins the reply language."""
+    return LANGUAGE_RULES.get(code, LANGUAGE_RULES["english"])

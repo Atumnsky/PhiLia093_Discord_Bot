@@ -64,6 +64,7 @@ class Settings:
     max_history: int
     timestamp_suffix: bool
     status_messages: bool
+    reply_language: str
 
     # --- Chat model (DeepSeek) ---
     deepseek_key: str
@@ -89,10 +90,35 @@ class Settings:
     tavily_key: str
     max_search_results: int
 
+    # --- Daily news ---
+    timezone: str
+    news_enabled: bool
+    news_channel: int
+    news_time: str
+    news_jitter: int
+
+    # --- Minecraft (Aternos) ---
+    aternos_username: str
+    aternos_password: str
+    aternos_session: str
+    aternos_server: str
+    minecraft_channel: int
+
     # --- Paths ---
     data_dir: Path
     chroma_dir: Path
     stickers_dir: Path
+
+    @property
+    def tz(self):
+        from zoneinfo import ZoneInfo
+
+        try:
+            return ZoneInfo(self.timezone)
+        except Exception:
+            from datetime import timezone as _tz
+
+            return _tz.utc
 
     def validate(self) -> None:
         missing = [
@@ -127,8 +153,9 @@ def load_settings() -> Settings:
         ),
         online_channel=online_channel,
         max_history=max(2, _int("MAX_HISTORY", 30)),
-        timestamp_suffix=_bool("TIMESTAMP_SUFFIX", True),
+        timestamp_suffix=_bool("TIMESTAMP_SUFFIX", False),
         status_messages=_bool("STATUS_MESSAGES", False),
+        reply_language=_str("REPLY_LANGUAGE", "english").lower(),
         deepseek_key=_raw("DEEPSEEK_API_KEY"),
         deepseek_model=_str("DEEPSEEK_MODEL", "deepseek-flash"),
         deepseek_pro_model=_str("DEEPSEEK_PRO_MODEL", "deepseek-v4-pro"),
@@ -148,6 +175,16 @@ def load_settings() -> Settings:
         aliyun_key=_raw("ALIYUN_API_KEY"),
         tavily_key=_raw("TAVILY_API_KEY"),
         max_search_results=max(1, min(10, _int("MAX_SEARCH_RESULTS", 5))),
+        timezone=_str("TIMEZONE", "Europe/Amsterdam"),
+        news_enabled=_bool("NEWS_ENABLED", True),
+        news_channel=_int("NEWS_CHANNEL_ID") or (chat_channels[0] if chat_channels else 0),
+        news_time=_str("NEWS_TIME", "09:30"),
+        news_jitter=max(0, _int("NEWS_JITTER_MINUTES", 45)),
+        aternos_username=_raw("ATERNOS_USERNAME"),
+        aternos_password=_raw("ATERNOS_PASSWORD"),
+        aternos_session=_raw("ATERNOS_SESSION"),
+        aternos_server=_raw("ATERNOS_SERVER"),
+        minecraft_channel=_int("MINECRAFT_CHANNEL_ID") or (chat_channels[0] if chat_channels else 0),
         data_dir=data_dir,
         chroma_dir=Path(_str("CHROMA_PATH", str(BASE_DIR / "chroma_knowledge"))),
         stickers_dir=Path(_str("STICKERS_DIR", str(BASE_DIR / "stickers"))),
