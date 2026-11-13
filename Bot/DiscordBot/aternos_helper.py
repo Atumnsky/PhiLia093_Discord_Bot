@@ -146,7 +146,17 @@ def main() -> None:
             if is_online(info):
                 info["already"] = True
                 emit(info)
-            server.start()
+            try:
+                server.start()
+            except Exception as exc:
+                message = str(exc)
+                if "401" in message or "403" in message or "Access denied" in message:
+                    raise RuntimeError(
+                        "Aternos denied the start request: this account has no "
+                        "permission to start the server. Grant the shared account "
+                        "'start server' access, or use the owner account."
+                    ) from exc
+                raise
             try:
                 server.confirm()
             except Exception:
