@@ -1,4 +1,4 @@
-"""PhiLia093 / Cyrene — Discord entry point.
+"""PhiLia093 — Discord entry point.
 
 Run with:  python main.py
 Windows:   start_bot.bat
