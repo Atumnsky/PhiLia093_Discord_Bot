@@ -110,6 +110,8 @@ def fetch_info(server) -> dict:
         raise RuntimeError("Unable to parse Aternos status object")
     info = json.loads(match.group(1))
     info.setdefault("_id", server.servid)
+    # Keep the library's own cache in sync: start()/eula() read server._info.
+    server._info = info
     return info
 
 
