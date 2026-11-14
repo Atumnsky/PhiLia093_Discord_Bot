@@ -30,9 +30,17 @@ NO_PING = discord.AllowedMentions.none()
 
 
 async def _send(channel, *args, **kwargs):
-    """Send a message that can never ping anyone."""
+    """Send a message that never pings anyone and never shows link previews."""
     kwargs.setdefault("allowed_mentions", NO_PING)
-    return await channel.send(*args, **kwargs)
+    message = await channel.send(*args, **kwargs)
+
+    content = args[0] if args else kwargs.get("content", "")
+    if isinstance(content, str) and "http" in content:
+        try:
+            await message.edit(suppress=True)
+        except Exception:
+            log.debug("Could not suppress embeds", exc_info=True)
+    return message
 
 
 STICKER_PATTERN = re.compile(r"\[STICKER:\s*([a-zA-Z_]+)\s*\]", re.IGNORECASE)

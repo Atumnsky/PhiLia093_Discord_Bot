@@ -71,6 +71,18 @@ def next_run_from(now: datetime) -> datetime:
     return target
 
 
+async def _post(channel, text: str) -> None:
+    """Send without pings and without link previews."""
+    message = await channel.send(
+        text, allowed_mentions=discord.AllowedMentions.none()
+    )
+    if "http" in text:
+        try:
+            await message.edit(suppress=True)
+        except Exception:
+            log.debug("Could not suppress embeds", exc_info=True)
+
+
 async def compose(channel) -> str:
     """Search, write and post the daily story. Returns the text (may be empty)."""
     outcome, trends = await asyncio.gather(
@@ -120,7 +132,7 @@ async def compose(channel) -> str:
     text = STICKER_TAG.sub("", reply).strip()
     sticker = STICKER_TAG.search(reply)
 
-    await channel.send(text, allowed_mentions=discord.AllowedMentions.none())
+    await _post(channel, text)
     if sticker:
         import stickers
 
@@ -129,10 +141,7 @@ async def compose(channel) -> str:
 
     if outcome.links:
         sources = "\n".join(f"[{i + 1}] {url}" for i, url in enumerate(outcome.links[:3]))
-        await channel.send(
-            f"**Sources:**\n{sources}",
-            allowed_mentions=discord.AllowedMentions.none(),
-        )
+        await _post(channel, f"**Sources:**\n{sources}")
 
     return reply
 
