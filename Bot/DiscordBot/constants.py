@@ -78,6 +78,7 @@ I'm here, ready when you are~
 **Fun**
 `#lets sing <song>` — lyric game
 `#ping` — check my latency
+`#stats` — today's token usage and memory
 """
 
 LANGUAGE_RULES = {

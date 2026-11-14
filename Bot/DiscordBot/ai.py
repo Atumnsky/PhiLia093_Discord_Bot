@@ -59,6 +59,7 @@ async def complete(
         raise ChatError(str(exc)) from exc
 
     text = (response.choices[0].message.content or "").strip()
+    record_usage(response)
     if not text and thinking:
         log.info("Empty answer with thinking enabled, retrying without it")
         payload.pop("extra_body", None)
@@ -66,10 +67,60 @@ async def complete(
         try:
             response = await client().chat.completions.create(**payload)  # type: ignore[arg-type]
             text = (response.choices[0].message.content or "").strip()
+            record_usage(response)
         except Exception as exc:
             raise ChatError(str(exc)) from exc
 
     return text
+
+
+# --------------------------------------------------------------------------
+# Token accounting (per local day, persisted to data/usage.json)
+# --------------------------------------------------------------------------
+
+import json
+from datetime import datetime
+
+USAGE_FILE = settings.data_dir / "usage.json"
+
+
+def _today() -> str:
+    return datetime.now(settings.tz).strftime("%Y-%m-%d")
+
+
+def load_usage() -> dict:
+    try:
+        data = json.loads(USAGE_FILE.read_text("utf-8"))
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def record_usage(response) -> None:
+    usage = getattr(response, "usage", None)
+    if usage is None:
+        return
+    day = _today()
+    data = load_usage()
+    entry = data.get(day) or {"calls": 0, "prompt": 0, "completion": 0}
+    entry["calls"] += 1
+    entry["prompt"] += int(getattr(usage, "prompt_tokens", 0) or 0)
+    entry["completion"] += int(getattr(usage, "completion_tokens", 0) or 0)
+    data[day] = entry
+    # keep the file small: last 30 days
+    for old in sorted(data)[:-30]:
+        data.pop(old, None)
+    try:
+        settings.data_dir.mkdir(parents=True, exist_ok=True)
+        tmp = USAGE_FILE.with_suffix(".tmp")
+        tmp.write_text(json.dumps(data, indent=1), "utf-8")
+        tmp.replace(USAGE_FILE)
+    except Exception:
+        log.debug("Could not save usage", exc_info=True)
+
+
+def usage_today() -> dict:
+    return load_usage().get(_today()) or {"calls": 0, "prompt": 0, "completion": 0}
 
 
 def clip(text: str, limit: int = MAX_MESSAGE_CHARS) -> str:

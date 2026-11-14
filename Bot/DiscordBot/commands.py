@@ -26,6 +26,8 @@ from constants import HELP_TEXT, SYSTEM_PROMPT, TIME_KEYWORDS, language_rule
 
 log = logging.getLogger(__name__)
 
+STARTED_AT = time.time()
+
 NO_PING = discord.AllowedMentions.none()
 
 
@@ -401,6 +403,10 @@ async def handle_command(message: discord.Message) -> bool:
             await _send(channel, "My stars are already empty, nothing to clean ♪")
         return True
 
+    if lowered in {"stats", "usage"}:
+        await _handle_stats(message)
+        return True
+
     # --- daily news -------------------------------------------------------
     if lowered == "news" or lowered.startswith("news "):
         await _handle_news(message)
@@ -664,6 +670,37 @@ async def _handle_describe(
         )
     else:
         await send_text(channel, description)
+
+
+async def _handle_stats(message: discord.Message) -> None:
+    """Today's token usage plus the bot's own footprint."""
+    import ai
+
+    usage = ai.usage_today()
+    total = usage["prompt"] + usage["completion"]
+
+    rss_mb = 0
+    try:
+        with open("/proc/self/status", encoding="utf-8") as handle:
+            for line in handle:
+                if line.startswith("VmRSS:"):
+                    rss_mb = int(line.split()[1]) // 1024
+                    break
+    except Exception:
+        pass
+
+    uptime_s = int(time.time() - STARTED_AT)
+    hours, remainder = divmod(uptime_s, 3600)
+    minutes = remainder // 60
+
+    now = datetime.now(settings.tz)
+    await _send(
+        message.channel,
+        f"📊 **{now.strftime('%Y-%m-%d')}** ({settings.timezone})\n"
+        f"calls **{usage['calls']}** · tokens **{total:,}** "
+        f"(in {usage['prompt']:,} / out {usage['completion']:,})\n"
+        f"memory **{rss_mb} MB** · uptime {hours}h {minutes}m",
+    )
 
 
 async def _handle_news(message: discord.Message) -> None:
