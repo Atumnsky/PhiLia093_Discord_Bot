@@ -112,6 +112,16 @@ async def answer(
             {
                 "role": "system",
                 "content": (
+                    "You cannot manage Discord yourself (no creating channels, "
+                    "roles or changing settings). If the user asks for that, tell "
+                    "them to send `#agent <what they want>` instead."
+                ),
+            }
+        )
+        system_messages.append(
+            {
+                "role": "system",
+                "content": (
                     f"Now: {now.strftime('%Y-%m-%d %H:%M %Z')} "
                     f"({now.strftime('%A')}). This is the real time; ignore your "
                     "knowledge cutoff. For 'how long ago' prefer Discord timestamps."

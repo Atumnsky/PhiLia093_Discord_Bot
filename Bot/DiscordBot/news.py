@@ -28,11 +28,14 @@ STATE_FILE = settings.data_dir / "state.json"
 STICKER_TAG = re.compile(r"\[STICKER:\s*[a-zA-Z_]+\s*\]", re.IGNORECASE)
 
 _prompt = (
-    "Pick the single hottest story from the search results above. "
-    "Write 2-3 sentences telling me what happened, then one short, personal "
-    "reaction (your own opinion, not a summary), then one question that invites "
-    "me to chat about it. Keep the whole thing under 700 characters, warm tone, "
-    "end with ♪. You may append one [STICKER: emotion] tag."
+    "Pick the single hottest story from the news results above. "
+    "Write 2-3 sentences on what happened, one short personal reaction, "
+    "then one question that invites me to chat. "
+    "Then add a new line exactly like: '📈 Trending today: ' followed by 5 short "
+    "keywords or topics (1-3 words each) separated by ' · ', drawn from the "
+    "trends results below (if they are useless, infer from the headlines). "
+    "Keep everything under 700 characters, warm tone, end with ♪. "
+    "You may append one [STICKER: emotion] tag."
 )
 
 
@@ -70,7 +73,10 @@ def next_run_from(now: datetime) -> datetime:
 
 async def compose(channel) -> str:
     """Search, write and post the daily story. Returns the text (may be empty)."""
-    outcome = await search.web_search("top world news today", 6)
+    outcome, trends = await asyncio.gather(
+        search.web_search("top world news today", 6),
+        search.web_search("what people are searching for today google trends", 4),
+    )
 
     now = datetime.now(settings.tz)
     system = [
@@ -92,6 +98,15 @@ async def compose(channel) -> str:
             ),
         },
     ]
+
+    if trends.found:
+        system.append(
+            {
+                "role": "system",
+                "content": "Search trends results (for the trending list):\n\n"
+                + trends.text,
+            }
+        )
 
     try:
         reply = await ai.complete(system, thinking=False, max_tokens=800)
