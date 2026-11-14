@@ -47,6 +47,13 @@ async def _send(channel, *args, **kwargs):
 
 STICKER_PATTERN = re.compile(r"\[STICKER:\s*([a-zA-Z_]+)\s*\]", re.IGNORECASE)
 STICKER_CLEAN = re.compile(r"\[STICKER:[^\]]*\]", re.IGNORECASE)
+IMAGE_PATTERN = re.compile(r"\[IMAGE:\s*([^\]]+)\]", re.IGNORECASE)
+
+IMAGE_REQUEST_HINT = re.compile(
+    r"\b(draw|paint|sketch|create|make|generate|imagine)\b.{0,40}?"
+    r"\b(image|picture|photo|art|drawing|illustration|wallpaper|头像|图)\b",
+    re.IGNORECASE,
+)
 
 # In-memory session state
 games: dict[int, dict] = {}
@@ -200,6 +207,21 @@ async def answer(
 
         history.append({"role": "assistant", "content": reply})
 
+        image_request = IMAGE_PATTERN.search(reply)
+        if image_request:
+            drawing = image_request.group(1).strip()
+            leftovers = IMAGE_PATTERN.sub("", reply).strip()
+            if leftovers:
+                await send_text(channel, leftovers)
+            try:
+                pictures = await imagine.generate(drawing)
+                await send_pictures(channel, pictures)
+            except imagine.ImageError as exc:
+                await send_text(channel, f"🎨 I could not draw that: {exc}")
+            if remember:
+                last_conversation[user_id] = {"user": prompt, "bot": reply}
+            return reply
+
         sticker_match = STICKER_PATTERN.search(reply)
         clean = STICKER_CLEAN.sub("", reply).strip()
         if sticker_match:
@@ -230,8 +252,47 @@ def wants_search(user_id: int, text: str) -> bool:
     return any(keyword in lowered for keyword in TIME_KEYWORDS)
 
 
+async def _describe_attachment(message: discord.Message) -> str:
+    """Describe the first image attachment, if any. Never raises."""
+    for attachment in message.attachments:
+        looks_like_image = (
+            (attachment.content_type or "").startswith("image/")
+            or (attachment.filename or "").lower().endswith(
+                (".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp")
+            )
+        )
+        if not looks_like_image:
+            continue
+        try:
+            data = await vision.download(attachment.url)
+            return await vision.describe(
+                data, "Describe this image in English in under 75 words."
+            )
+        except Exception as exc:  # noqa: BLE001
+            log.warning("Auto-describe failed: %s", exc)
+            return ""
+    return ""
+
+
 async def chat(message: discord.Message, prompt: str) -> None:
-    """Plain conversational turn, with automatic search when appropriate."""
+    """Plain conversational turn, with automatic search and image understanding."""
+    systems: list[str] = []
+
+    description = await _describe_attachment(message)
+    if description:
+        systems.append(
+            f"The user just posted an image. Its content: {description}"
+        )
+        if not prompt:
+            prompt = "What do you think about this image?"
+
+    if IMAGE_REQUEST_HINT.search(prompt):
+        systems.append(
+            "The user is asking for a picture. Reply with "
+            "[IMAGE: a detailed English description of the scene] and at most "
+            "one short line of text."
+        )
+
     outcome = None
     if wants_search(message.author.id, prompt):
         await _send(message.channel, f"🔎 Searching for **{prompt}**...")
@@ -241,7 +302,11 @@ async def chat(message: discord.Message, prompt: str) -> None:
             "answer_text": "",
             "links": outcome.links,
         }
-    reply = await answer(message, prompt, search_outcome=outcome)
+
+    reply = await answer(message, prompt, search_outcome=outcome, systems=systems)
+
+    if description:
+        image_context[message.channel.id] = description
     if outcome is not None and last_search.get(message.author.id):
         last_search[message.author.id]["answer_text"] = reply
 

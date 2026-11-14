@@ -6,6 +6,7 @@ Aliyun Qwen-Image is optional and only used for `hq` requests and edits.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import random
 from dataclasses import dataclass
@@ -28,6 +29,14 @@ class ImageError(RuntimeError):
     pass
 
 
+class RateLimited(ImageError):
+    """The free backend allows one image per ~45s per IP."""
+
+    def __init__(self, seconds: int) -> None:
+        self.seconds = max(1, seconds)
+        super().__init__(f"rate limited for {self.seconds}s")
+
+
 @dataclass
 class Picture:
     data: bytes
@@ -37,13 +46,19 @@ class Picture:
 
 async def _download(session: aiohttp.ClientSession, url: str) -> bytes:
     async with session.get(url, timeout=aiohttp.ClientTimeout(total=120)) as response:
+        if response.status == 402:
+            try:
+                retry_after = int(response.headers.get("Retry-After", 45))
+            except (TypeError, ValueError):
+                retry_after = 45
+            raise RateLimited(retry_after)
         if response.status != 200:
             raise ImageError(f"Download failed with HTTP {response.status}")
         return await response.read()
 
 
 async def generate(prompt: str, *, hq: bool = False, count: int = 1) -> list[Picture]:
-    """Generate `count` pictures. Never raises for upstream hiccups."""
+    """Generate `count` pictures. Raises ImageError with a readable reason."""
     prompt = prompt.strip()[:1500]
     if not prompt:
         raise ImageError("Empty prompt")
@@ -56,33 +71,53 @@ async def generate(prompt: str, *, hq: bool = False, count: int = 1) -> list[Pic
         if use_aliyun:
             return await _aliyun_generate(prompt, count)
         return await _pollinations_generate(prompt)
-    except Exception as exc:
-        log.warning("Image generation failed (%s), trying fallback", exc)
-        if not use_aliyun and settings.aliyun_key:
-            try:
-                return await _aliyun_generate(prompt, count)
-            except Exception as fallback_exc:
-                log.warning("Aliyun fallback failed too: %s", fallback_exc)
-        if use_aliyun:
-            try:
-                return await _pollinations_generate(prompt)
-            except Exception as fallback_exc:
-                log.warning("Pollinations fallback failed too: %s", fallback_exc)
-        raise ImageError("All image backends failed") from exc
+    except ImageError:
+        # Already has a user-facing message; never fall back to the paid
+        # backend silently.
+        raise
+    except Exception as exc:  # noqa: BLE001
+        log.warning("Image generation failed: %s", exc)
+        raise ImageError("image generation failed, try again in a moment") from exc
 
 
 async def _pollinations_generate(prompt: str) -> list[Picture]:
     size = settings.image_size
-    seed = random.randint(1, 2_000_000_000)
-    url = (
-        POLLINATIONS_URL.format(prompt=quote(prompt, safe=""))
-        + f"?width={size}&height={size}"
-        + f"&model={quote(settings.pollinations_model)}"
-        + f"&seed={seed}&nologo=true&private=true"
-    )
-    async with aiohttp.ClientSession() as session:
-        data = await _download(session, url)
-    return [Picture(data=data, source="pollinations", filename=f"philia_{seed}.jpg")]
+    last_error: Exception | None = None
+
+    for attempt in range(3):
+        seed = random.randint(1, 2_000_000_000)
+        url = (
+            POLLINATIONS_URL.format(prompt=quote(prompt, safe=""))
+            + f"?width={size}&height={size}"
+            + f"&model={quote(settings.pollinations_model)}"
+            + f"&seed={seed}&nologo=true&private=true"
+        )
+        try:
+            async with aiohttp.ClientSession() as session:
+                data = await _download(session, url)
+            if len(data) < 2000:
+                raise ImageError("the free service returned an empty image")
+            return [
+                Picture(data=data, source="pollinations", filename=f"philia_{seed}.jpg")
+            ]
+        except RateLimited as exc:
+            # Waiting 45s inside a chat turn is too long; tell the user how long.
+            if exc.seconds <= 12:
+                log.info("Rate limited, waiting %ss", exc.seconds)
+                await asyncio.sleep(exc.seconds + 2)
+                continue
+            raise ImageError(
+                f"the free image service allows one image every ~45s - "
+                f"try again in {exc.seconds}s"
+            ) from exc
+        except Exception as exc:  # noqa: BLE001
+            last_error = exc
+            log.info("Pollinations attempt %s failed: %r", attempt + 1, exc)
+            await asyncio.sleep(1.5 * (attempt + 1))
+
+    raise ImageError(
+        "the free image service is busy right now, try again in a moment"
+    ) from last_error
 
 
 async def _aliyun_generate(prompt: str, count: int) -> list[Picture]:

@@ -26,6 +26,10 @@ SYSTEM_PROMPT = """
 当你觉得贴纸能让对话更有趣或表达情绪时，可以在回复末尾添加 [STICKER: 情绪]，
 情绪可以是：caring, funny, happy, hug, love, sad, shock, surprised, thumbsup, wave, curious。
 贴纸会在消息后自动发送，不一定要每次都用。
+
+### 图片指令
+当用户要求你生成/画图片时，先输出 [IMAGE: 详细的英文画面描述]，
+然后最多再加一句很短的话。图片会自动生成并发出去。
 """
 
 # 触发自动搜索的关键词（即使用户没开 #autosearch）
