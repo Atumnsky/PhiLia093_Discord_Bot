@@ -71,6 +71,25 @@ with sources. The last run date is stored in `data/state.json`, so a restart
 does not produce duplicates. Set `NEWS_ENABLED=false` to turn it off,
 `NEWS_CHANNEL_ID` to post somewhere else.
 
+## Agent bridge (Discord → DSH)
+
+`#agent <task>` stores an instruction in `data/agent_tasks.json`. The bot only
+writes text — it never executes anything. The DSH agent reads the queue over
+SSH, does the work **inside Discord / bot scope only** (channels, messages,
+roles, bot config, bot files), then posts the result back and closes the task.
+
+```
+#agent create a channel called news-only
+#agent list
+```
+
+- Only user IDs in `AGENT_ALLOWED_USERS` may queue tasks; empty disables it.
+- Max 5 pending tasks, 800 characters each.
+- The agent side uses the CLI: `venv/bin/python agent_queue.py list|claim|done|fail`.
+
+Scope rule: the agent refuses anything that would touch the user's own computer.
+The bridge can only ever ask for Discord/bot changes.
+
 ## Minecraft (Aternos)
 
 `#mc start` logs into Aternos with the account from `.env`, calls the start

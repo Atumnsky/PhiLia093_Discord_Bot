@@ -388,6 +388,11 @@ async def handle_command(message: discord.Message) -> bool:
         await _handle_news(message)
         return True
 
+    # --- agent bridge (Discord -> DSH queue) ------------------------------
+    if lowered == "agent" or lowered.startswith(("agent ", "task ", "dsh ")):
+        await _handle_agent(message, body)
+        return True
+
     # --- minecraft --------------------------------------------------------
     if lowered == "mc" or lowered.startswith(("mc ", "minecraft")):
         await _handle_minecraft(message, body)
@@ -652,6 +657,64 @@ async def _handle_news(message: discord.Message) -> None:
         text = await news.compose(channel)
     if not text:
         await _send(channel, "Nothing worth reporting came back - try again later ♪")
+
+
+async def _handle_agent(message: discord.Message, body: str) -> None:
+    """Store an instruction for the DSH agent. The bot never executes it."""
+    import agent_queue
+
+    channel = message.channel
+    user_id = message.author.id
+
+    if not settings.agent_allowed_users:
+        await _send(channel, "🧠 The agent bridge is not configured (AGENT_ALLOWED_USERS).")
+        return
+    if user_id not in settings.agent_allowed_users:
+        await _send(channel, "🧠 Only the owner can hand tasks to the agent.")
+        return
+
+    text = body
+    for keyword in ("agent", "task", "dsh"):
+        if text.lower().startswith(keyword):
+            text = text[len(keyword) :].lstrip()
+            break
+    text = text.strip()
+
+    if text.lower() in {"list", "status"}:
+        pending = agent_queue.list_tasks("pending")
+        running = agent_queue.list_tasks("in_progress")
+        lines = [f"🧠 pending {len(pending)} · running {len(running)}"]
+        for task in pending[:5]:
+            lines.append(f"`#{task['id']}` {task['text'][:90]}")
+        for task in running[:5]:
+            lines.append(f"`#{task['id']}` (running) {task['text'][:80]}")
+        if len(lines) == 1:
+            lines.append("Nothing queued.")
+        await _send(channel, "\n".join(lines))
+        return
+
+    if not text or text.lower() in {"help", "?"}:
+        await _send(
+            channel,
+            "🧠 Hand me a task and I act **inside Discord only**.\n"
+            "`#agent create a channel called news-only`\n"
+            "`#agent list` shows the queue.",
+        )
+        return
+
+    try:
+        task = agent_queue.enqueue(
+            text, user_id, message.author.name, channel.id, message.id
+        )
+    except RuntimeError:
+        await _send(channel, "🧠 The queue is full (5 pending), wait for me to clear it.")
+        return
+
+    await _send(
+        channel,
+        f"🧠 Queued `#{task['id']}` for DSH: {task['text']}\n"
+        "I'll post the result here once it is done.",
+    )
 
 
 async def _handle_minecraft(message: discord.Message, body: str) -> None:

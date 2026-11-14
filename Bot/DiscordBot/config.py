@@ -106,6 +106,9 @@ class Settings:
     aternos_poll: int
     minecraft_channel: int
 
+    # --- Agent bridge (Discord -> DSH instruction queue) ---
+    agent_allowed_users: tuple[int, ...]
+
     # --- Paths ---
     data_dir: Path
     chroma_dir: Path
@@ -177,6 +180,7 @@ def load_settings() -> Settings:
         aliyun_key=_raw("ALIYUN_API_KEY"),
         tavily_key=_raw("TAVILY_API_KEY"),
         max_search_results=max(1, min(10, _int("MAX_SEARCH_RESULTS", 5))),
+        agent_allowed_users=_ids("AGENT_ALLOWED_USERS"),
         timezone=_str("TIMEZONE", "Europe/Amsterdam"),
         news_enabled=_bool("NEWS_ENABLED", True),
         news_channel=_int("NEWS_CHANNEL_ID") or (chat_channels[0] if chat_channels else 0),

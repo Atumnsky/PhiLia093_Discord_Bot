@@ -71,6 +71,10 @@ I'm here, ready when you are~
 `#mc status` — show my Minecraft servers
 `#mc start [name]` — boot a server, I'll report when it's online
 
+**Agent**
+`#agent <task>` — queue a Discord-side task for the agent (owner only)
+`#agent list` — show the queue
+
 **Fun**
 `#lets sing <song>` — lyric game
 `#ping` — check my latency
