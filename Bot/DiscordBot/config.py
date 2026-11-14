@@ -65,6 +65,7 @@ class Settings:
     timestamp_suffix: bool
     status_messages: bool
     reply_language: str
+    thinking_default: bool
 
     # --- Chat model (DeepSeek) ---
     deepseek_key: str
@@ -161,6 +162,7 @@ def load_settings() -> Settings:
         timestamp_suffix=_bool("TIMESTAMP_SUFFIX", False),
         status_messages=_bool("STATUS_MESSAGES", False),
         reply_language=_str("REPLY_LANGUAGE", "english").lower(),
+        thinking_default=_bool("THINKING_DEFAULT", False),
         deepseek_key=_raw("DEEPSEEK_API_KEY"),
         deepseek_model=_str("DEEPSEEK_MODEL", "deepseek-flash"),
         deepseek_pro_model=_str("DEEPSEEK_PRO_MODEL", "deepseek-v4-pro"),

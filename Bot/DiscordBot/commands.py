@@ -117,7 +117,7 @@ async def answer(
     channel = message.channel
     user_id = message.author.id
     model = current_model(user_id)
-    thinking = bool(memory.prefs.get("thinking", user_id, True))
+    thinking = bool(memory.prefs.get("thinking", user_id, settings.thinking_default))
 
     async with channel.typing():
         now = datetime.now(settings.tz)
@@ -383,7 +383,7 @@ async def handle_command(message: discord.Message) -> bool:
         if option in {"on", "off"}:
             value = option == "on"
         else:
-            value = not bool(memory.prefs.get("thinking", user_id, True))
+            value = not bool(memory.prefs.get("thinking", user_id, settings.thinking_default))
         memory.prefs.set("thinking", user_id, value)
         await _send(channel, 
             f"Thinking mode **{'on' if value else 'off'}** ♪"
