@@ -78,6 +78,7 @@ class AternosDaemon:
         self._reader: asyncio.Task | None = None
         self._stderr: asyncio.Task | None = None
         self._stderr_tail: list[str] = []
+        self._supervising = False
         self.on_change = on_change
 
     async def ensure(self) -> None:
@@ -121,6 +122,42 @@ class AternosDaemon:
                 reason = "; ".join(self._stderr_tail[-3:]) or "helper exited"
                 future.set_exception(MCError(f"Aternos helper stopped: {reason}"))
         self._pending.clear()
+
+        code = None
+        try:
+            if self._process is not None:
+                code = await self._process.wait()
+        except Exception:
+            pass
+        log.warning(
+            "Aternos helper exited (code=%s): %s",
+            code,
+            " / ".join(self._stderr_tail[-3:]) or "no stderr output",
+        )
+
+    async def supervise(self, interval: float = 90) -> None:
+        """Restart the helper if it died and keep the state log short."""
+        last: dict[str, str] = {}
+        while True:
+            await asyncio.sleep(interval)
+            if not configured():
+                return
+            try:
+                payload = await self.request("list", timeout=180)
+            except Exception as exc:  # noqa: BLE001
+                log.warning("Aternos supervisor could not reach the helper: %s", exc)
+                continue
+
+            states = {
+                server.get("name", "?"): server.get("state", "?")
+                for server in payload.get("servers", [])
+            }
+            if states != last:
+                last = states
+                log.info(
+                    "Aternos: %s",
+                    ", ".join(f"{name}({state})" for name, state in states.items()),
+                )
 
     async def _read_stderr(self) -> None:
         assert self._process is not None and self._process.stderr is not None
@@ -248,6 +285,9 @@ async def start_announcer(bot) -> None:
 
     client = daemon()
     client.on_change = on_change
+    if not client._supervising:
+        client._supervising = True
+        asyncio.create_task(client.supervise(120))
     try:
         servers = await list_status()
         log.info(
