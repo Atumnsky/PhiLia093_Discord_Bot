@@ -31,6 +31,34 @@ ONLINE_STATES = {"online"}
 SESSION_FILE = os.path.expanduser("~/.philia_aternos_session")
 
 _print_lock = threading.Lock()
+_started_at = time.time()
+
+# The helper grows by a few MB per hour (cloudscraper + js2py). Recycle before
+# the kernel gets involved: 300 MB or 3 hours, whichever comes first.
+MAX_RSS_MB = int(os.environ.get("ATERNOS_MAX_RSS_MB", "300") or 300)
+MAX_LIFETIME = int(os.environ.get("ATERNOS_MAX_LIFETIME", "10800") or 10800)
+
+
+def _rss_mb() -> int:
+    try:
+        with open("/proc/self/status", encoding="utf-8") as handle:
+            for line in handle:
+                if line.startswith("VmRSS:"):
+                    return int(line.split()[1]) // 1024
+    except Exception:
+        pass
+    return 0
+
+
+def should_recycle() -> bool:
+    rss = _rss_mb()
+    if rss and rss > MAX_RSS_MB:
+        log(f"memory {rss}MB over limit {MAX_RSS_MB}MB")
+        return True
+    if time.time() - _started_at > MAX_LIFETIME:
+        log(f"running longer than {MAX_LIFETIME}s")
+        return True
+    return False
 
 
 def emit(payload: dict, code: int = 0) -> None:
@@ -230,12 +258,16 @@ def announce_name(server) -> str:
 
 
 def serve() -> None:
+    global _started_at
+    _started_at = time.time()
+
     client = build_client()
     servers = list_servers(client)
     if not servers:
         emit({"ok": False, "error": "This Aternos account cannot see any servers"}, 1)
 
     log(f"serving {len(servers)} server(s)")
+    started = time.time()
 
     last_state: dict[str, str] = {}
 
@@ -257,6 +289,12 @@ def serve() -> None:
                             **info,
                         }
                     )
+
+            # cloudscraper/js2py slowly leak; recycle before the kernel OOMs us.
+            if should_recycle():
+                log("recycling helper (memory/lifetime limit)")
+                os._exit(0)
+
             time.sleep(POLL)
 
     threading.Thread(target=poll_loop, daemon=True).start()

@@ -13,6 +13,7 @@ module.exports = {
       cwd: __dirname,
       autorestart: true,
       max_restarts: 20,
+      max_memory_restart: "400M",
       restart_delay: 5000,
       kill_timeout: 15000,
       time: true,
